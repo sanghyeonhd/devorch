@@ -12,11 +12,14 @@ import (
 )
 
 type ProviderConfig struct {
-	ClientID     string
-	ClientSecret string
-	AuthURL      string // OIDC custom
-	TokenURL     string // OIDC custom
-	Scopes       []string
+	ClientID      string
+	ClientSecret  string
+	AuthURL       string // OIDC custom
+	TokenURL      string // OIDC custom
+	IssuerURL     string // OIDC discovery base URL
+	DeviceAuthURL string // Device flow endpoint
+	Scopes        []string
+	Audience      string // for some providers
 }
 
 type Manager struct {

@@ -1,6 +1,9 @@
 package provider
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 type ProviderInfo struct {
 	Name string
@@ -8,14 +11,16 @@ type ProviderInfo struct {
 }
 
 type Registry struct {
-	mu   sync.RWMutex
-	m    map[string]Provider
-	list []ProviderInfo
+	mu      sync.RWMutex
+	m       map[string]Provider
+	clients map[string]ChatClient
+	list    []ProviderInfo
 }
 
 func NewRegistry() *Registry {
 	return &Registry{
-		m: make(map[string]Provider),
+		m:       make(map[string]Provider),
+		clients: make(map[string]ChatClient),
 	}
 }
 
@@ -26,7 +31,27 @@ func (r *Registry) Register(p Provider) {
 	r.rebuildList()
 }
 
-func (r *Registry) Get(name string) (Provider, bool) {
+func (r *Registry) RegisterClient(name string, c ChatClient) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.clients[name] = c
+}
+
+func (r *Registry) Get(name string) (ChatClient, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	// ChatClient 우선
+	if c, ok := r.clients[name]; ok {
+		return c, true
+	}
+	// Legacy Provider는 adapter로 반환
+	if p, ok := r.m[name]; ok {
+		return &providerAdapter{p: p}, true
+	}
+	return nil, false
+}
+
+func (r *Registry) GetProvider(name string) (Provider, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	p, ok := r.m[name]
@@ -46,4 +71,34 @@ func (r *Registry) rebuildList() {
 	for name, p := range r.m {
 		r.list = append(r.list, ProviderInfo{Name: name, Kind: p.Kind()})
 	}
+}
+
+func (r *Registry) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
+	c, ok := r.Get(req.Provider)
+	if !ok {
+		return ChatResponse{}, ErrProviderNotFound
+	}
+	if req.Stream {
+		return c.ChatStream(ctx, req, func(_ StreamChunk) error { return nil })
+	}
+	return c.Chat(ctx, req)
+}
+
+// providerAdapter wraps legacy Provider as ChatClient
+type providerAdapter struct {
+	p Provider
+}
+
+func (a *providerAdapter) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
+	return a.p.Chat(ctx, req)
+}
+
+func (a *providerAdapter) ChatStream(ctx context.Context, req ChatRequest, yield func(StreamChunk) error) (ChatResponse, error) {
+	// Legacy providers don't support streaming, just call Chat
+	resp, err := a.p.Chat(ctx, req)
+	if err != nil {
+		return resp, err
+	}
+	_ = yield(StreamChunk{TextDelta: resp.Text(), Done: true})
+	return resp, nil
 }

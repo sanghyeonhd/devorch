@@ -65,7 +65,10 @@ func main() {
 		defer cancel()
 		// simple call via provider health (wire already registered)
 		for _, pinfo := range deps.ProviderRegistry.List() {
-			p, _ := deps.ProviderRegistry.Get(pinfo.Name)
+			p, ok := deps.ProviderRegistry.GetProvider(pinfo.Name)
+			if !ok {
+				continue
+			}
 			if err := p.Health(ctx); err != nil {
 				log.Errorf("provider %s health failed: %v", pinfo.Name, err)
 				os.Exit(1)
@@ -89,7 +92,7 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		p, ok := deps.ProviderRegistry.Get(*provName)
+		p, ok := deps.ProviderRegistry.GetProvider(*provName)
 		if !ok {
 			fmt.Printf("provider not found: %s\n", *provName)
 			os.Exit(2)
