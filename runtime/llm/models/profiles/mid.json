@@ -1,0 +1,6 @@
+{
+  "profile": "mid",
+  "targets": [
+    { "runtime": "ollama", "models": ["llama3.1:8b", "qwen2.5:14b"] }
+  ]
+}
