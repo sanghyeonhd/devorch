@@ -4,10 +4,12 @@ go 1.22
 
 require (
 	github.com/oklog/ulid/v2 v2.1.0
+	golang.org/x/oauth2 v0.24.0
 	modernc.org/sqlite v1.32.0
 )
 
 require (
+	cloud.google.com/go/compute/metadata v0.3.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
