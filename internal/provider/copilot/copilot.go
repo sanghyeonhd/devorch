@@ -2,6 +2,7 @@ package copilot
 
 import (
 	"context"
+	"os"
 
 	"devorch/internal/provider"
 	"devorch/internal/provider/openai_compat"
@@ -13,11 +14,16 @@ type Provider struct {
 }
 
 // New creates a new GitHub Copilot provider
+// Reads token from COPILOT_TOKEN or GITHUB_TOKEN environment variable
 func New() *Provider {
+	token := os.Getenv("COPILOT_TOKEN")
+	if token == "" {
+		token = os.Getenv("GITHUB_TOKEN")
+	}
 	return &Provider{
 		c: openai_compat.New(
 			"https://api.githubcopilot.com",
-			"", // Token from GITHUB_TOKEN or COPILOT_TOKEN env
+			token,
 			nil,
 		),
 	}

@@ -1,5 +1,11 @@
 package modelresolver
 
+import (
+	"math/rand"
+	"sync"
+	"time"
+)
+
 // SelectionPolicy는 모델 선택 정책을 정의합니다
 type SelectionPolicy string
 
@@ -40,12 +46,18 @@ func DefaultPolicyConfig() PolicyConfig {
 
 // PolicySelector는 정책 기반 선택을 수행합니다
 type PolicySelector struct {
-	config PolicyConfig
+	config        PolicyConfig
+	mu            sync.Mutex
+	roundRobinIdx int
+	rng           *rand.Rand
 }
 
 // NewPolicySelector는 새 PolicySelector를 생성합니다
 func NewPolicySelector(config PolicyConfig) *PolicySelector {
-	return &PolicySelector{config: config}
+	return &PolicySelector{
+		config: config,
+		rng:    rand.New(rand.NewSource(time.Now().UnixNano())),
+	}
 }
 
 // SelectFromChain는 체인에서 정책에 따라 선택합니다
@@ -58,11 +70,9 @@ func (ps *PolicySelector) SelectFromChain(chain []Resolution) Resolution {
 	case PolicyPriority:
 		return ps.selectByPriority(chain)
 	case PolicyRoundRobin:
-		// 라운드로빈은 상태가 필요하므로 우선 첫 번째 반환
-		return chain[0]
+		return ps.selectByRoundRobin(chain)
 	case PolicyRandom:
-		// 실제 랜덤은 별도 구현 필요
-		return chain[0]
+		return ps.selectByRandom(chain)
 	case PolicyBandit:
 		// Bandit는 외부에서 선택하므로 첫 번째 반환
 		return chain[0]
@@ -88,4 +98,21 @@ func (ps *PolicySelector) selectByPriority(chain []Resolution) Resolution {
 		return chain[0]
 	}
 	return best
+}
+
+func (ps *PolicySelector) selectByRoundRobin(chain []Resolution) Resolution {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
+	idx := ps.roundRobinIdx % len(chain)
+	ps.roundRobinIdx++
+	return chain[idx]
+}
+
+func (ps *PolicySelector) selectByRandom(chain []Resolution) Resolution {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
+	idx := ps.rng.Intn(len(chain))
+	return chain[idx]
 }

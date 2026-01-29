@@ -11,10 +11,13 @@
 DevOrch는 Go 기반의 AI 오케스트레이션 데몬/툴킷입니다. 다수의 LLM 프로바이더를 통합하고, 유연한 내장 도구 시스템, TUI/WebUI, LSP/진단 도구, 세션 기록, SQLite 스토리지, 플랫폼/하드웨어 감지, 국제화(i18n)를 제공합니다.
 
 ### 1.1 핵심 특징
-- **멀티 프로바이더**: OpenAI, Anthropic, Google, Azure, AWS Bedrock, Ollama 등 15개 이상의 LLM 프로바이더 지원
-- **내장 도구 시스템**: 파일 편집, 검색, 웹 검색, 코드 분석, 배치 작업 등 25개 이상의 도구
+- **멀티 프로바이더**: OpenAI, Anthropic, Google, Azure, AWS Bedrock, Ollama 등 17개 LLM 프로바이더 지원
+- **내장 도구 시스템**: 파일 편집, 검색, 웹 검색, 코드 분석, 배치 작업, LSP 등 25개 이상의 도구
 - **스마트 라우팅**: Thompson Sampling 기반 밴딧 알고리즘으로 최적의 모델 자동 선택
 - **듀얼 인터페이스**: TUI (Terminal UI) + Web UI 동시 지원
+- **ACP WebSocket**: IDE 통합을 위한 양방향 WebSocket 통신 지원
+- **PTY 터미널**: 네이티브 PTY 터미널 에뮬레이터 내장 (creack/pty)
+- **테마 시스템**: 31개의 사전 정의된 테마 (Catppuccin, Kanagawa, Rosé Pine 등)
 - **로컬 모델**: Ollama 번들링 및 자동 시작 지원
 - **국제화**: 영어, 한국어, 일본어, 중국어 지원
 
@@ -330,6 +333,9 @@ devorch/
 │   │   └── weights.go                     # 가중치
 │   ├── runtime/                           # 런타임
 │   │   └── version/                       # 버전 정보
+│   ├── pty/                               # PTY 터미널 에뮬레이터
+│   │   ├── pty.go                         # PTY 코어 (creack/pty)
+│   │   └── model.go                       # Bubbletea PTY 모델
 │   ├── server/                            # HTTP 서버
 │   │   ├── middleware/                    # 미들웨어
 │   │   │   ├── auth.go                    # 인증
@@ -344,7 +350,8 @@ devorch/
 │   │   │   ├── register.go                # 등록
 │   │   │   ├── stream.go                  # 스트림
 │   │   │   ├── tasks.go                   # 태스크 API
-│   │   │   └── tools.go                   # 도구 API
+│   │   │   ├── tools.go                   # 도구 API
+│   │   │   └── websocket.go               # ACP WebSocket 허브
 │   │   └── server.go                      # 서버 초기화
 │   ├── session/                           # 세션 관리
 │   │   ├── events.go                      # 이벤트
@@ -941,16 +948,39 @@ type Theme struct {
     InlineCode lipgloss.Style  // 인라인 코드
 }
 
-// 사전 정의된 테마들
-func DefaultTheme() Theme      // 기본 다크 테마
-func LightTheme() Theme        // 라이트 테마
-func MonochromeTheme() Theme   // 모노크롬
-func DraculaTheme() Theme      // Dracula
-func NordTheme() Theme         // Nord
-func SolarizedTheme() Theme    // Solarized
-func GruvboxTheme() Theme      // Gruvbox
-func TokyoNightTheme() Theme   // Tokyo Night
-// ... 20+ 테마
+// 사전 정의된 테마들 (총 31개)
+func DefaultTheme() Theme              // 기본 다크 테마
+func LightTheme() Theme                // 라이트 테마
+func MonochromeTheme() Theme           // 모노크롬
+func DraculaTheme() Theme              // Dracula
+func NordTheme() Theme                 // Nord
+func SolarizedTheme() Theme            // Solarized Light
+func SolarizedDarkTheme() Theme        // Solarized Dark
+func GruvboxTheme() Theme              // Gruvbox Dark
+func GruvboxLightTheme() Theme         // Gruvbox Light
+func TokyoNightTheme() Theme           // Tokyo Night
+func TokyoNightStormTheme() Theme      // Tokyo Night Storm
+func TokyoNightDayTheme() Theme        // Tokyo Night Day
+func OneDarkTheme() Theme              // One Dark
+func OneLightTheme() Theme             // One Light
+func MaterialTheme() Theme             // Material
+func MaterialLightTheme() Theme        // Material Light
+func CatppuccinTheme() Theme           // Catppuccin Mocha
+func CatppuccinLatteTheme() Theme      // Catppuccin Latte
+func CatppuccinFrappeTheme() Theme     // Catppuccin Frappé
+func CatppuccinMacchiatoTheme() Theme  // Catppuccin Macchiato
+func AyuDarkTheme() Theme              // Ayu Dark
+func AyuLightTheme() Theme             // Ayu Light
+func AyuMirageTheme() Theme            // Ayu Mirage
+func RosePineTheme() Theme             // Rosé Pine
+func RosePineMoonTheme() Theme         // Rosé Pine Moon
+func RosePineDawnTheme() Theme         // Rosé Pine Dawn
+func NightOwlTheme() Theme             // Night Owl
+func GitHubDarkTheme() Theme           // GitHub Dark
+func GitHubLightTheme() Theme          // GitHub Light
+func KanagawaWaveTheme() Theme         // Kanagawa Wave
+func KanagawaDragonTheme() Theme       // Kanagawa Dragon
+func Cobalt2Theme() Theme              // Cobalt2
 ```
 
 ### 7.2 TUI 컴포넌트

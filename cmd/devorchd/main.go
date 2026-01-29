@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
+	"time"
 
 	"devorch/internal/app"
 	"devorch/internal/config"
@@ -79,18 +81,68 @@ func main() {
 	// OAuth authorize endpoint (starts OAuth flow)
 	mux.HandleFunc("/oauth/authorize/", func(w http.ResponseWriter, r *http.Request) {
 		// Extract provider from path
-		provider := r.URL.Path[len("/oauth/authorize/"):]
-		if provider == "" {
+		providerName := r.URL.Path[len("/oauth/authorize/"):]
+		if providerName == "" {
 			http.Error(w, "missing provider", http.StatusBadRequest)
 			return
 		}
 
-		// For now, return a placeholder response
-		// OAuth flow requires proper setup with client IDs
+		// Get provider-specific OAuth URLs
+		var authURL string
+		var envVar string
+
+		switch providerName {
+		case "github":
+			clientID := os.Getenv("GITHUB_CLIENT_ID")
+			if clientID == "" {
+				http.Error(w, "GITHUB_CLIENT_ID not set", http.StatusBadRequest)
+				return
+			}
+			authURL = fmt.Sprintf("https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=http://%s/oauth/callback/github&scope=repo,user", clientID, addr)
+			envVar = "GITHUB_CLIENT_ID"
+
+		case "google":
+			clientID := os.Getenv("GOOGLE_CLIENT_ID")
+			if clientID == "" {
+				http.Error(w, "GOOGLE_CLIENT_ID not set", http.StatusBadRequest)
+				return
+			}
+			authURL = fmt.Sprintf("https://accounts.google.com/o/oauth2/v2/auth?client_id=%s&redirect_uri=http://%s/oauth/callback/google&response_type=code&scope=openid%%20email%%20profile", clientID, addr)
+			envVar = "GOOGLE_CLIENT_ID"
+
+		default:
+			// For providers without OAuth, redirect to API key page
+			var apiKeyURL string
+			switch providerName {
+			case "anthropic":
+				apiKeyURL = "https://console.anthropic.com/settings/keys"
+			case "openai":
+				apiKeyURL = "https://platform.openai.com/api-keys"
+			case "openrouter":
+				apiKeyURL = "https://openrouter.ai/keys"
+			case "groq":
+				apiKeyURL = "https://console.groq.com/keys"
+			default:
+				http.Error(w, "unknown provider: "+providerName, http.StatusBadRequest)
+				return
+			}
+
+			resp := map[string]string{
+				"type":    "api_key",
+				"url":     apiKeyURL,
+				"message": fmt.Sprintf("Get your API key from %s and set the environment variable", apiKeyURL),
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		state := fmt.Sprintf("devorch_%d", time.Now().UnixNano())
 		resp := map[string]string{
-			"auth_url": fmt.Sprintf("https://oauth.example.com/authorize?provider=%s&redirect_uri=http://%s/oauth/callback/%s", provider, addr, provider),
-			"state":    "placeholder-state",
-			"message":  "OAuth is configured but requires client IDs. Set GITHUB_CLIENT_ID, GOOGLE_CLIENT_ID, etc.",
+			"type":     "oauth",
+			"auth_url": authURL,
+			"state":    state,
+			"env_var":  envVar,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
@@ -102,13 +154,116 @@ func main() {
 		code := r.URL.Query().Get("code")
 		state := r.URL.Query().Get("state")
 
-		if code == "" || state == "" {
-			http.Error(w, "missing code or state", http.StatusBadRequest)
+		if code == "" {
+			http.Error(w, "missing authorization code", http.StatusBadRequest)
 			return
 		}
 
-		// Placeholder: actual token exchange would happen here
-		_, _ = w.Write([]byte(fmt.Sprintf("OAuth callback received for %s. Token exchange pending implementation.", provider)))
+		// Verify state has our prefix
+		if state != "" && len(state) >= 8 && state[:8] != "devorch_" {
+			http.Error(w, "invalid state parameter", http.StatusBadRequest)
+			return
+		}
+
+		// Token exchange based on provider
+		var tokenURL string
+		var clientID, clientSecret string
+		var formData map[string]string
+
+		switch provider {
+		case "github":
+			clientID = os.Getenv("GITHUB_CLIENT_ID")
+			clientSecret = os.Getenv("GITHUB_CLIENT_SECRET")
+			if clientID == "" || clientSecret == "" {
+				http.Error(w, "GitHub OAuth not configured (missing GITHUB_CLIENT_ID or GITHUB_CLIENT_SECRET)", http.StatusBadRequest)
+				return
+			}
+			tokenURL = "https://github.com/login/oauth/access_token"
+			formData = map[string]string{
+				"client_id":     clientID,
+				"client_secret": clientSecret,
+				"code":          code,
+			}
+
+		case "google":
+			clientID = os.Getenv("GOOGLE_CLIENT_ID")
+			clientSecret = os.Getenv("GOOGLE_CLIENT_SECRET")
+			if clientID == "" || clientSecret == "" {
+				http.Error(w, "Google OAuth not configured (missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET)", http.StatusBadRequest)
+				return
+			}
+			tokenURL = "https://oauth2.googleapis.com/token"
+			formData = map[string]string{
+				"client_id":     clientID,
+				"client_secret": clientSecret,
+				"code":          code,
+				"grant_type":    "authorization_code",
+				"redirect_uri":  fmt.Sprintf("http://%s/oauth/callback/google", addr),
+			}
+
+		default:
+			http.Error(w, "OAuth callback not supported for provider: "+provider, http.StatusBadRequest)
+			return
+		}
+
+		// Make token exchange request
+		form := make([]string, 0, len(formData))
+		for k, v := range formData {
+			form = append(form, fmt.Sprintf("%s=%s", k, v))
+		}
+		reqBody := strings.NewReader(strings.Join(form, "&"))
+
+		req, err := http.NewRequest("POST", tokenURL, reqBody)
+		if err != nil {
+			http.Error(w, "failed to create token request: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Accept", "application/json")
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			http.Error(w, "token exchange failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer resp.Body.Close()
+
+		var tokenResp map[string]any
+		if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+			http.Error(w, "failed to parse token response: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Check for error in response
+		if errMsg, ok := tokenResp["error"].(string); ok {
+			errDesc, _ := tokenResp["error_description"].(string)
+			http.Error(w, fmt.Sprintf("OAuth error: %s - %s", errMsg, errDesc), http.StatusBadRequest)
+			return
+		}
+
+		// Success response with HTML that shows the token
+		accessToken, _ := tokenResp["access_token"].(string)
+		tokenType, _ := tokenResp["token_type"].(string)
+		if tokenType == "" {
+			tokenType = "Bearer"
+		}
+
+		// Return success page with instructions
+		html := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head><title>OAuth Success - DevOrch</title></head>
+<body style="font-family: system-ui; padding: 2rem; max-width: 600px; margin: 0 auto;">
+<h1>✅ Authentication Successful!</h1>
+<p>Provider: <strong>%s</strong></p>
+<p>Your access token has been received. To use it with DevOrch:</p>
+<pre style="background: #f0f0f0; padding: 1rem; border-radius: 4px; overflow-x: auto;">export %s_TOKEN=%s</pre>
+<p>You can close this window now.</p>
+</body>
+</html>`, provider, strings.ToUpper(provider), accessToken)
+
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(html))
 	})
 
 	// OAuth status endpoint

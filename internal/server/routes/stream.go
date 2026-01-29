@@ -25,7 +25,8 @@ func (r *StreamRoutes) handleStream(w http.ResponseWriter, req *http.Request) {
 	sessionID := req.URL.Query().Get("session_id")
 	taskID := req.URL.Query().Get("task_id")
 
-	// TODO: auth middleware에서 workspace 접근권한 확인 (8단계 강화)
+	// Note: For production deployment, add authentication middleware
+	// to verify workspace access permissions before allowing SSE connections
 	sub := r.Hub.Subscribe("sse-"+time.Now().Format("150405.000"), bus.TopicSessionStream, bus.TopicSystem)
 	defer sub.Close()
 

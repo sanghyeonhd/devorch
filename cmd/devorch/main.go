@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"devorch/internal/app"
@@ -13,6 +14,7 @@ import (
 	"devorch/internal/config"
 	"devorch/internal/global"
 	"devorch/internal/log"
+	"devorch/internal/mcp"
 	"devorch/internal/provider"
 	"devorch/internal/router"
 	"devorch/internal/tui"
@@ -34,9 +36,11 @@ Usage:
   devorch login-status --provider github|google|openai|anthropic
   devorch logout --provider github|google|openai|anthropic
   
+  devorch setup             # Auto-detect hardware and setup optimal model
+  devorch install           # Install essential models for your hardware
   devorch bench --provider ollama --model llama3.2 --iterations 5
   devorch stats --provider ollama --model llama3.2
-  devorch setup             # Auto-detect hardware and setup optimal model
+  devorch mcp               # Manage MCP servers
 
 Env:
   DEVORCH_DB_PATH=./devorch.db
@@ -81,8 +85,21 @@ func main() {
 	}
 
 	switch cmd {
+	case "test-commands":
+		// Debug: list all slash commands
+		runTestCommands()
+		return
+
 	case "setup":
 		runAutoSetup()
+		return
+
+	case "install":
+		runInstallModels()
+		return
+
+	case "mcp":
+		runMCPSetup()
 		return
 
 	case "connect":
@@ -417,15 +434,100 @@ func runAutoSetup() {
 		os.Exit(1)
 	}
 
-	fmt.Println(theme.Success.Render("✓ Setup complete!"))
-	fmt.Printf("  Recommended model: %s\n", result.RecommendedModel)
+	fmt.Println(theme.Success.Render("✓ Hardware detection complete!"))
 	fmt.Printf("  System tier: %s\n", result.Tier)
+	fmt.Printf("  Primary model: %s\n", result.RecommendedModel)
+	fmt.Println()
+
+	// Show all recommended models for this tier
+	essentialModels := autosetup.GetEssentialModels(result.Tier)
+	fmt.Println(theme.Accent.Render("📦 Essential Models for your system:"))
+	for _, model := range essentialModels {
+		if autosetup.IsModelInstalled(model) {
+			fmt.Printf("  ✓ %s (installed)\n", model)
+		} else {
+			fmt.Printf("  ○ %s\n", model)
+		}
+	}
+	fmt.Println()
+
+	// Show MCP server recommendations
+	fmt.Println(theme.Accent.Render("🔌 Essential MCP Servers:"))
+	fmt.Println("  • filesystem   - File system operations")
+	fmt.Println("  • github       - GitHub API (requires GITHUB_TOKEN)")
+	fmt.Println("  • context7     - Library documentation")
+	fmt.Println("  • fetch        - HTTP fetch operations")
+	fmt.Println("  • memory       - Persistent memory storage")
+	fmt.Println("  • sequential-thinking - Enhanced reasoning")
+	fmt.Println()
+
 	if result.OllamaInstalled {
 		fmt.Println(theme.Success.Render("  ✓ Ollama ready"))
+	} else {
+		fmt.Println(theme.Warning.Render("  ⚠ Ollama not installed"))
+		fmt.Println("    Install: curl -fsSL https://ollama.ai/install.sh | sh")
 	}
+
 	if result.ModelInstalled {
-		fmt.Println(theme.Success.Render("  ✓ Model installed"))
+		fmt.Println(theme.Success.Render("  ✓ Primary model installed"))
 	}
+	fmt.Println()
+
+	// Instructions for full setup
+	fmt.Println(theme.Title.Render("📋 Quick Start Commands:"))
+	fmt.Println()
+	fmt.Println("  # Install essential models (recommended):")
+	fmt.Println("  DEVORCH_AUTO_INSTALL=1 devorch setup")
+	fmt.Println()
+	fmt.Println("  # Or install manually:")
+	for _, model := range essentialModels[:min(3, len(essentialModels))] {
+		fmt.Printf("  ollama pull %s\n", model)
+	}
+	fmt.Println()
+	fmt.Println("  # Configure MCP servers:")
+	fmt.Println("  devorch mcp setup")
+	fmt.Println()
+	fmt.Println("Run 'devorch' to start the interactive session.")
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// runInstallModels installs essential Ollama models
+func runInstallModels() {
+	theme := tui.DefaultTheme()
+
+	fmt.Println()
+	fmt.Println(theme.Title.Render("  📦 DevOrch Model Installer  "))
+	fmt.Println()
+
+	// Get hardware tier
+	profile, err := global.GetHWProfile()
+	tier := "mid"
+	if err != nil {
+		fmt.Printf("Warning: couldn't detect hardware: %v\n", err)
+	} else {
+		tier = profile.Tier()
+	}
+
+	fmt.Printf("Hardware tier: %s\n\n", tier)
+
+	// Install essential models
+	fmt.Println("Installing essential models for your system...")
+	fmt.Println("This may take a while depending on your internet speed.")
+	fmt.Println()
+
+	if err := autosetup.InstallEssentialModels(true); err != nil {
+		tui.PrintError(err, theme)
+		os.Exit(1)
+	}
+
+	fmt.Println()
+	fmt.Println(theme.Success.Render("✓ Model installation complete!"))
 	fmt.Println()
 	fmt.Println("Run 'devorch' to start the interactive session.")
 }
@@ -492,4 +594,203 @@ func runConnect() {
 	}
 	fmt.Println()
 	fmt.Println("After setting the key, restart devorch to use the provider.")
+}
+
+// runMCPSetup runs MCP server auto-configuration
+func runMCPSetup() {
+	theme := tui.DefaultTheme()
+
+	fmt.Println()
+	fmt.Println(theme.Title.Render("  🔌 DevOrch MCP Setup  "))
+	fmt.Println()
+
+	// Check subcommand
+	subCmd := "setup"
+	if len(os.Args) > 2 {
+		subCmd = os.Args[2]
+	}
+
+	manager := mcp.NewManager()
+	configurator := mcp.NewAutoConfigurator(manager, mcp.DefaultAutoConfigOptions())
+
+	switch subCmd {
+	case "setup", "configure":
+		env := configurator.DetectEnvironment()
+
+		fmt.Println("🔍 Detecting environment...")
+		fmt.Printf("  OS: %s (%s)\n", env.OS, env.Arch)
+		fmt.Printf("  Node.js: %v", env.HasNode)
+		if env.HasNode {
+			fmt.Printf(" (%s)", env.NodeVersion)
+		}
+		fmt.Println()
+		fmt.Printf("  NPX: %v\n", env.HasNPX)
+		fmt.Println()
+
+		// Show available API keys
+		fmt.Println("🔑 API Keys detected:")
+		apiKeys := []string{"GITHUB_TOKEN", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"}
+		for _, key := range apiKeys {
+			if env.AvailableAPIKeys[key] {
+				fmt.Printf("  ✓ %s\n", key)
+			} else {
+				fmt.Printf("  ○ %s (not set)\n", key)
+			}
+		}
+		fmt.Println()
+
+		// Show essential servers
+		essentialServers := mcp.GetEssentialMCPServers()
+		fmt.Println(theme.Accent.Render("📦 Essential MCP Servers:"))
+		for _, server := range essentialServers {
+			status := "○"
+			note := ""
+			if server.RequiresAPI && server.APIKeyEnv != "" {
+				if !env.AvailableAPIKeys[server.APIKeyEnv] {
+					status = "⚠"
+					note = fmt.Sprintf(" (requires %s)", server.APIKeyEnv)
+				} else {
+					status = "✓"
+				}
+			} else if server.URL != "" {
+				status = "✓" // URL-based servers always work
+			} else if env.HasNPX {
+				status = "✓" // NPX-based servers work if NPX is available
+			}
+			fmt.Printf("  %s %-20s - %s%s\n", status, server.Name, server.Description, note)
+		}
+		fmt.Println()
+
+		// Auto-configure
+		fmt.Println("🔧 Configuring MCP servers...")
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		result, err := configurator.QuickSetup(ctx)
+		if err != nil {
+			fmt.Printf("  ✗ Configuration failed: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println()
+		fmt.Println(theme.Success.Render("✓ MCP Configuration Complete!"))
+		fmt.Printf("  Config saved to: %s\n", result.ConfigPath)
+		fmt.Printf("  Configured: %d servers\n", len(result.Configured))
+		if len(result.Skipped) > 0 {
+			fmt.Printf("  Skipped: %d servers\n", len(result.Skipped))
+		}
+		fmt.Println()
+
+		if len(result.Configured) > 0 {
+			fmt.Println("Configured servers:")
+			for _, name := range result.Configured {
+				fmt.Printf("  ✓ %s\n", name)
+			}
+		}
+
+		if len(result.Skipped) > 0 {
+			fmt.Println()
+			fmt.Println("Skipped servers (missing requirements):")
+			for _, s := range result.Skipped {
+				fmt.Printf("  ○ %s - %s\n", s.Name, s.Reason)
+			}
+		}
+
+	case "list":
+		fmt.Println("Available MCP servers:")
+		servers := mcp.GetRecommendedServers()
+		categories := mcp.GetServersByCategory()
+
+		for cat, catServers := range categories {
+			fmt.Printf("\n%s:\n", theme.Accent.Render(cat))
+			for _, s := range catServers {
+				apiNote := ""
+				if s.RequiresAPI {
+					apiNote = fmt.Sprintf(" [%s]", s.APIKeyEnv)
+				}
+				fmt.Printf("  • %-20s - %s%s\n", s.Name, s.Description, apiNote)
+			}
+		}
+		fmt.Printf("\nTotal: %d servers available\n", len(servers))
+
+	case "test":
+		fmt.Println("Testing MCP server connections...")
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		results := configurator.TestAllServers(ctx)
+		success := 0
+		for name, err := range results {
+			if err == nil {
+				fmt.Printf("  ✓ %s - OK\n", name)
+				success++
+			} else {
+				fmt.Printf("  ✗ %s - %v\n", name, err)
+			}
+		}
+		fmt.Printf("\n%d/%d servers working\n", success, len(results))
+
+	default:
+		fmt.Println("Usage: devorch mcp <command>")
+		fmt.Println()
+		fmt.Println("Commands:")
+		fmt.Println("  setup   - Auto-configure essential MCP servers")
+		fmt.Println("  list    - List all available MCP servers")
+		fmt.Println("  test    - Test MCP server connections")
+	}
+}
+
+// runTestCommands tests the slash command system
+func runTestCommands() {
+	fmt.Println("=== DevOrch Slash Commands Test ===")
+	fmt.Println()
+
+	commands := tui.GetSlashCommands()
+	fmt.Printf("Total commands: %d\n\n", len(commands))
+
+	// Group by category
+	categories := make(map[string][]tui.SlashCommand)
+	for _, cmd := range commands {
+		categories[cmd.Category] = append(categories[cmd.Category], cmd)
+	}
+
+	// Print by category
+	catOrder := []string{"Session", "Edit", "Project", "Model", "Context", "Settings", "Auth", "Tools", "System", "Help", "Custom"}
+	for _, cat := range catOrder {
+		cmds, ok := categories[cat]
+		if !ok {
+			continue
+		}
+		fmt.Printf("📁 %s (%d):\n", cat, len(cmds))
+		for _, cmd := range cmds {
+			fmt.Printf("   /%s - %s\n", cmd.Name, cmd.Description)
+		}
+		fmt.Println()
+	}
+
+	// Test filter
+	fmt.Println("=== Filter Test ===")
+	testFilters := []string{"/th", "/con", "/de", "/un"}
+	for _, filter := range testFilters {
+		filtered := tui.FilterCommands(filter)
+		fmt.Printf("Filter '%s': ", filter)
+		names := make([]string, len(filtered))
+		for i, cmd := range filtered {
+			names[i] = "/" + cmd.Name
+		}
+		fmt.Println(strings.Join(names, ", "))
+	}
+
+	// Test themes
+	fmt.Println()
+	fmt.Println("=== Available Themes ===")
+	themes := tui.AvailableThemes()
+	fmt.Printf("Total: %d themes\n", len(themes))
+	for i, th := range themes {
+		if i > 0 && i%5 == 0 {
+			fmt.Println()
+		}
+		fmt.Printf("  • %s", th)
+	}
+	fmt.Println()
 }

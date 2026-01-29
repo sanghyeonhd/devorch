@@ -2,12 +2,15 @@ package mcp
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os/exec"
 	"sync"
+	"time"
 )
 
 // Transport defines the interface for MCP communication
@@ -156,4 +159,95 @@ func (t *StdioTransport) readResponses() {
 		}
 		t.mu.Unlock()
 	}
+}
+
+// HTTPTransport communicates with MCP server via HTTP
+type HTTPTransport struct {
+	url    string
+	client *http.Client
+
+	mu     sync.Mutex
+	nextID int
+}
+
+// NewHTTPTransport creates a new HTTP transport
+func NewHTTPTransport(url string) *HTTPTransport {
+	return &HTTPTransport{
+		url: url,
+		client: &http.Client{
+			Timeout: 60 * time.Second,
+		},
+	}
+}
+
+// Send sends a request via HTTP POST
+func (t *HTTPTransport) Send(ctx context.Context, req *Request) (*Response, error) {
+	t.mu.Lock()
+	// Assign ID if not set
+	if req.ID == nil {
+		t.nextID++
+		req.ID = t.nextID
+	}
+	t.mu.Unlock()
+
+	// Marshal request
+	data, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Create HTTP request
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", t.url, bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	// Send request
+	httpResp, err := t.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("HTTP request failed: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(httpResp.Body)
+		return nil, fmt.Errorf("HTTP error %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var resp Response
+	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &resp, nil
+}
+
+// Notify sends a notification via HTTP POST (no response expected)
+func (t *HTTPTransport) Notify(ctx context.Context, notif *Notification) error {
+	data, err := json.Marshal(notif)
+	if err != nil {
+		return fmt.Errorf("failed to marshal notification: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", t.url, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	httpResp, err := t.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("HTTP request failed: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	// For notifications, we don't care about the response body
+	return nil
+}
+
+// Close closes the HTTP transport (no-op for HTTP)
+func (t *HTTPTransport) Close() error {
+	return nil
 }

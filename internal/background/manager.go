@@ -3,6 +3,7 @@ package background
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -115,7 +116,9 @@ func (m *Manager) worker(ctx context.Context) {
 
 func safeRun(ctx context.Context, fn func(context.Context) error) (err error) {
 	defer func() {
-		_ = recover()
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic recovered in background task: %v", r)
+		}
 	}()
 	if fn == nil {
 		return nil

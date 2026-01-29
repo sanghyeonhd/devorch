@@ -17,6 +17,7 @@ var (
 	questionTool    *QuestionTool
 	skillTool       *SkillTool
 	codeSearchTool  *CodeSearchTool
+	lspTool         *LSPTool
 )
 
 func init() {
@@ -27,6 +28,7 @@ func init() {
 	questionTool = NewQuestionTool()
 	skillTool = NewSkillTool()
 	codeSearchTool = NewCodeSearchTool()
+	// lspTool is initialized in DefaultTools with rootDir
 }
 
 // DefaultTools returns all built-in tools with default configuration
@@ -42,6 +44,9 @@ func DefaultTools(rootDir string) []tool.Tool {
 
 	// Initialize agent tool with limited access
 	agentTool = NewAgentTool(readOnlyTools)
+
+	// Initialize LSP tool with rootDir
+	lspTool = NewLSPTool(rootDir)
 
 	return []tool.Tool{
 		// File system tools
@@ -114,6 +119,9 @@ func DefaultTools(rootDir string) []tool.Tool {
 
 		// Code search tool
 		codeSearchTool,
+
+		// LSP operations tool
+		lspTool,
 	}
 }
 
@@ -150,6 +158,8 @@ func ToolNames() []string {
 		"question",
 		// Skills
 		"skill",
+		// LSP
+		"lsp",
 	}
 }
 
@@ -191,6 +201,11 @@ func GetSkillTool() *SkillTool {
 // GetCodeSearchTool returns the singleton code search tool instance
 func GetCodeSearchTool() *CodeSearchTool {
 	return codeSearchTool
+}
+
+// GetLSPTool returns the singleton LSP tool instance
+func GetLSPTool() *LSPTool {
+	return lspTool
 }
 
 // CreateBatchTool creates a batch tool with the given registry

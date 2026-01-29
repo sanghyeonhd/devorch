@@ -2,6 +2,7 @@ package cohere
 
 import (
 	"context"
+	"os"
 
 	"devorch/internal/provider"
 	"devorch/internal/provider/openai_compat"
@@ -13,11 +14,13 @@ type Provider struct {
 }
 
 // New creates a new Cohere provider
+// Reads API key from COHERE_API_KEY environment variable
 func New() *Provider {
+	apiKey := os.Getenv("COHERE_API_KEY")
 	return &Provider{
 		c: openai_compat.New(
 			"https://api.cohere.ai/v1",
-			"", // API key from COHERE_API_KEY env
+			apiKey,
 			nil,
 		),
 	}

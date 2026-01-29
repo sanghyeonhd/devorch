@@ -10,10 +10,14 @@ type Topic string
 
 const (
 	TopicSessionStream Topic = "session.stream"
+	TopicSessionChat   Topic = "session.chat"
+	TopicToolCall      Topic = "tool.call"
+	TopicToolResult    Topic = "tool.result"
 	TopicSystem        Topic = "system"
 )
 
 type Event struct {
+	ID        string    `json:"id,omitempty"`
 	Topic     Topic     `json:"topic"`
 	Workspace string    `json:"workspace"`
 	SessionID string    `json:"session_id,omitempty"`
@@ -23,7 +27,7 @@ type Event struct {
 	Time      time.Time `json:"time"`
 }
 
-type Subscriber struct {
+type Subscription struct {
 	ID     string
 	Topics map[Topic]bool
 	Ch     chan Event
@@ -32,14 +36,14 @@ type Subscriber struct {
 
 type Hub struct {
 	mu   sync.RWMutex
-	subs map[string]*Subscriber
+	subs map[string]*Subscription
 }
 
 func NewHub() *Hub {
-	return &Hub{subs: map[string]*Subscriber{}}
+	return &Hub{subs: map[string]*Subscription{}}
 }
 
-func (h *Hub) Subscribe(id string, topics ...Topic) *Subscriber {
+func (h *Hub) Subscribe(id string, topics ...Topic) *Subscription {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -48,7 +52,7 @@ func (h *Hub) Subscribe(id string, topics ...Topic) *Subscriber {
 		tm[t] = true
 	}
 
-	sub := &Subscriber{
+	sub := &Subscription{
 		ID:     id,
 		Topics: tm,
 		Ch:     make(chan Event, 256),

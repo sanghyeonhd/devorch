@@ -173,7 +173,7 @@ func AskQuestion(ctx context.Context, question string, options []string, default
 		return "", err
 	}
 	if result.ExitCode != 0 {
-		return "", fmt.Errorf(result.Output)
+		return "", fmt.Errorf("%s", result.Output)
 	}
 	return result.Output, nil
 }

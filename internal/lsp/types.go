@@ -340,3 +340,27 @@ const (
 	DiagnosticSeverityInfo    = 3
 	DiagnosticSeverityHint    = 4
 )
+
+// CallHierarchyItem represents a call hierarchy item.
+type CallHierarchyItem struct {
+	Name           string `json:"name"`
+	Kind           int    `json:"kind"`
+	Tags           []int  `json:"tags,omitempty"`
+	Detail         string `json:"detail,omitempty"`
+	URI            string `json:"uri"`
+	Range          Range  `json:"range"`
+	SelectionRange Range  `json:"selectionRange"`
+	Data           any    `json:"data,omitempty"`
+}
+
+// CallHierarchyIncomingCall represents an incoming call.
+type CallHierarchyIncomingCall struct {
+	From       CallHierarchyItem `json:"from"`
+	FromRanges []Range           `json:"fromRanges"`
+}
+
+// CallHierarchyOutgoingCall represents an outgoing call.
+type CallHierarchyOutgoingCall struct {
+	To         CallHierarchyItem `json:"to"`
+	FromRanges []Range           `json:"fromRanges"`
+}

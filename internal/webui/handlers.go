@@ -3,8 +3,10 @@ package webui
 
 import (
 	"context"
+	"devorch/internal/tui"
 	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -162,7 +164,7 @@ func (s *ChatService) handleChat(ctx context.Context, req *APIRequest) (*APIResp
 	session.UpdatedAt = time.Now()
 	s.mu.Unlock()
 
-	// Generate response (placeholder - would integrate with LLM)
+	// Generate response via actual LLM (supports Ollama/Anthropic/OpenAI/etc)
 	response := s.generateResponse(ctx, input.Message, input.Model, input.Temperature)
 
 	// Add assistant message
@@ -198,15 +200,45 @@ func (s *ChatService) handleChat(ctx context.Context, req *APIRequest) (*APIResp
 }
 
 func (s *ChatService) generateResponse(ctx context.Context, message, model string, temperature float64) string {
-	// Placeholder response - would integrate with actual LLM provider
-	// This is where the provider.Registry would be used
+	// Use actual LLM provider via tui.ChatWithProvider
 
-	// Simple echo response for now
-	response := "I received your message: \"" + message + "\"\n\n"
-	response += "This is a placeholder response from the DevOrch web UI. "
-	response += "In a full implementation, this would connect to the LLM provider "
-	response += "and stream the response back to you.\n\n"
-	response += "Model: " + model + "\n"
+	// Determine provider from model name
+	provider := "ollama"
+	if strings.HasPrefix(model, "claude") || strings.HasPrefix(model, "anthropic") {
+		provider = "anthropic"
+	} else if strings.HasPrefix(model, "gpt") || strings.HasPrefix(model, "o1") {
+		provider = "openai"
+	} else if strings.HasPrefix(model, "gemini") {
+		provider = "google"
+	} else if strings.Contains(model, "/") {
+		provider = "openrouter"
+	}
+
+	// Check if Ollama is available, otherwise use available cloud provider
+	if provider == "ollama" {
+		// Check if any cloud API keys are set
+		if os.Getenv("ANTHROPIC_API_KEY") != "" {
+			provider = "anthropic"
+			model = "claude-sonnet-4-20250514"
+		} else if os.Getenv("OPENAI_API_KEY") != "" {
+			provider = "openai"
+			model = "gpt-4o"
+		} else if os.Getenv("GOOGLE_API_KEY") != "" {
+			provider = "google"
+			model = "gemini-2.0-flash"
+		}
+	}
+
+	// Build messages
+	messages := []tui.Message{
+		{Role: "user", Content: message},
+	}
+
+	// Call LLM
+	response, err := tui.ChatWithProvider(ctx, provider, model, messages)
+	if err != nil {
+		return "Error: " + err.Error() + "\n\nMake sure Ollama is running (ollama serve) or set an API key for a cloud provider."
+	}
 
 	return response
 }

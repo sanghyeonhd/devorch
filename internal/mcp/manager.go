@@ -130,7 +130,7 @@ func (m *Manager) GetClient(ctx context.Context, name string) (*Client, error) {
 			return nil, fmt.Errorf("failed to create transport: %w", err)
 		}
 	} else if serverConfig.URL != "" {
-		return nil, fmt.Errorf("HTTP transport not implemented")
+		transport = NewHTTPTransport(serverConfig.URL)
 	} else {
 		return nil, fmt.Errorf("no command or URL specified for server: %s", name)
 	}

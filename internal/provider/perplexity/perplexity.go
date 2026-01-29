@@ -2,6 +2,7 @@ package perplexity
 
 import (
 	"context"
+	"os"
 
 	"devorch/internal/provider"
 	"devorch/internal/provider/openai_compat"
@@ -13,11 +14,13 @@ type Provider struct {
 }
 
 // New creates a new Perplexity provider
+// Reads API key from PERPLEXITY_API_KEY environment variable
 func New() *Provider {
+	apiKey := os.Getenv("PERPLEXITY_API_KEY")
 	return &Provider{
 		c: openai_compat.New(
 			"https://api.perplexity.ai",
-			"", // API key from PERPLEXITY_API_KEY env
+			apiKey,
 			nil,
 		),
 	}

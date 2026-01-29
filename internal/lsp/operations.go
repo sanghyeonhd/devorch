@@ -329,3 +329,119 @@ type Command struct {
 	Command   string `json:"command"`
 	Arguments []any  `json:"arguments,omitempty"`
 }
+
+// GotoImplementation requests the implementation of a symbol.
+func (c *Client) GotoImplementation(ctx context.Context, uri string, line, character int) ([]Location, error) {
+	params := TextDocumentPositionParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Position:     Position{Line: line, Character: character},
+	}
+
+	resp, err := c.request(ctx, "textDocument/implementation", params)
+	if err != nil {
+		return nil, err
+	}
+
+	// Response can be Location, []Location, or []LocationLink
+	var locations []Location
+
+	// Try as single Location
+	var loc Location
+	if err := json.Unmarshal(resp.Result, &loc); err == nil && loc.URI != "" {
+		return []Location{loc}, nil
+	}
+
+	// Try as []Location
+	if err := json.Unmarshal(resp.Result, &locations); err == nil {
+		return locations, nil
+	}
+
+	// Try as []LocationLink
+	var links []LocationLink
+	if err := json.Unmarshal(resp.Result, &links); err == nil {
+		locations = make([]Location, len(links))
+		for i, link := range links {
+			locations[i] = Location{
+				URI:   link.TargetURI,
+				Range: link.TargetRange,
+			}
+		}
+		return locations, nil
+	}
+
+	return nil, fmt.Errorf("failed to parse implementation response")
+}
+
+// PrepareCallHierarchy prepares call hierarchy at a position.
+func (c *Client) PrepareCallHierarchy(ctx context.Context, uri string, line, character int) ([]CallHierarchyItem, error) {
+	params := TextDocumentPositionParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Position:     Position{Line: line, Character: character},
+	}
+
+	resp, err := c.request(ctx, "textDocument/prepareCallHierarchy", params)
+	if err != nil {
+		return nil, err
+	}
+
+	if string(resp.Result) == "null" {
+		return nil, nil
+	}
+
+	var items []CallHierarchyItem
+	if err := json.Unmarshal(resp.Result, &items); err != nil {
+		return nil, fmt.Errorf("failed to parse call hierarchy response: %w", err)
+	}
+
+	return items, nil
+}
+
+// IncomingCalls returns incoming calls for a call hierarchy item.
+func (c *Client) IncomingCalls(ctx context.Context, item CallHierarchyItem) ([]CallHierarchyIncomingCall, error) {
+	params := struct {
+		Item CallHierarchyItem `json:"item"`
+	}{
+		Item: item,
+	}
+
+	resp, err := c.request(ctx, "callHierarchy/incomingCalls", params)
+	if err != nil {
+		return nil, err
+	}
+
+	if string(resp.Result) == "null" {
+		return nil, nil
+	}
+
+	var calls []CallHierarchyIncomingCall
+	if err := json.Unmarshal(resp.Result, &calls); err != nil {
+		return nil, fmt.Errorf("failed to parse incoming calls response: %w", err)
+	}
+
+	return calls, nil
+}
+
+// OutgoingCalls returns outgoing calls for a call hierarchy item.
+func (c *Client) OutgoingCalls(ctx context.Context, item CallHierarchyItem) ([]CallHierarchyOutgoingCall, error) {
+	params := struct {
+		Item CallHierarchyItem `json:"item"`
+	}{
+		Item: item,
+	}
+
+	resp, err := c.request(ctx, "callHierarchy/outgoingCalls", params)
+	if err != nil {
+		return nil, err
+	}
+
+	if string(resp.Result) == "null" {
+		return nil, nil
+	}
+
+	var calls []CallHierarchyOutgoingCall
+	if err := json.Unmarshal(resp.Result, &calls); err != nil {
+		return nil, fmt.Errorf("failed to parse outgoing calls response: %w", err)
+	}
+
+	return calls, nil
+}
