@@ -11,6 +11,11 @@ import (
 	"devorch/internal/router"
 )
 
+// OkStore는 Run 저장 인터페이스
+type OkStore interface {
+	InsertRun(ctx context.Context, r okaon.Run) error
+}
+
 type Caller struct{}
 
 func NewCaller() *Caller { return &Caller{} }
@@ -19,7 +24,7 @@ func (c *Caller) CallAndRecord(
 	ctx context.Context,
 	reg *provider.Registry,
 	rt *router.Router,
-	okStore *okaon.Store,
+	okStore OkStore,
 	wl router.Workload,
 	candidates []router.Candidate,
 	req provider.ChatRequest,
@@ -39,45 +44,36 @@ func (c *Caller) CallAndRecord(
 	req.Model = dec.Model
 	resp, callErr := p.Chat(ctx, req)
 
-	lat := int(time.Since(start).Milliseconds())
+	lat := int64(time.Since(start).Milliseconds())
 
 	// Step2: local runtime이면 latency 기반으로 품질에 약간 반영(아주 보수적으로)
-	quality := estimateQuality(callErr == nil)
-	if callErr == nil && dec.Provider == "ollama" {
-		quality = qualityFromLatency(lat)
+	// quality := estimateQuality(callErr == nil)
+	// if callErr == nil && dec.Provider == "ollama" {
+	// 	quality = qualityFromLatency(int(lat))
+	// }
+
+	errCode := ""
+	errMsg := ""
+	if callErr != nil {
+		errCode = "provider_call_failed"
+		errMsg = callErr.Error()
 	}
 
 	run := okaon.Run{
-		RunID:     ulid.Make().String(),
-		CreatedAt: time.Now().Format(time.RFC3339Nano),
-
-		PolicyKey: router.BuildPolicyKey(wl),
-
-		WorkspaceID: wl.WorkspaceID,
-		UserID:      wl.UserID,
-		ProjectID:   wl.ProjectID,
-
-		AgentType: wl.AgentType,
-		Category:  wl.Category,
-		TaskType:  wl.TaskType,
-
-		Provider: dec.Provider,
-		Model:    dec.Model,
-		Endpoint: dec.Endpoint,
-
-		LatencyMS: lat,
-		OK:        boolToInt(callErr == nil),
-		Quality:   quality,
-
-		PromptTokens:     resp.PromptTokens,
-		CompletionTokens: resp.CompletionTokens,
-		TotalTokens:      resp.TotalTokens,
-		CostMicroUSD:     resp.CostMicroUSD,
-	}
-
-	if callErr != nil {
-		run.ErrorCode = "provider_call_failed"
-		run.ErrorMessage = callErr.Error()
+		ID:           ulid.Make().String(),
+		WorkID:       "", // 별도 work 생성 필요
+		Provider:     dec.Provider,
+		Model:        dec.Model,
+		RoutePolicy:  router.BuildPolicyKey(wl),
+		WasFallback:  false,
+		RetryCount:   0,
+		LatencyMs:    lat,
+		InputTokens:  int64(resp.PromptTokens),
+		OutputTokens: int64(resp.CompletionTokens),
+		CostMicroUSD: resp.CostMicroUSD,
+		ErrorCode:    errCode,
+		ErrorMsg:     errMsg,
+		CreatedAt:    time.Now().UTC(),
 	}
 
 	if okStore != nil {

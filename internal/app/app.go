@@ -1,7 +1,7 @@
 package app
 
 import (
-	"devorch/internal/okaon"
+	okaonsqlite "devorch/internal/okaon/sqlite"
 	"devorch/internal/provider"
 	"devorch/internal/router"
 	"devorch/internal/session"
@@ -11,7 +11,7 @@ import (
 type Deps struct {
 	DB               *sqlite.DB
 	ProviderRegistry *provider.Registry
-	OkAONStore       *okaon.Store
+	OkAONStore       *okaonsqlite.Store
 	Router           *router.Router
 	SessionCaller    *session.Caller
 }

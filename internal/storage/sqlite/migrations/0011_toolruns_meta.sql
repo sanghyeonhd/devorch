@@ -1,0 +1,2 @@
+ALTER TABLE tool_runs ADD COLUMN exit_code INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE tool_runs ADD COLUMN meta_json TEXT;

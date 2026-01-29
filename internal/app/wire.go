@@ -8,7 +8,7 @@ import (
 
 	"devorch/internal/config"
 	"devorch/internal/global"
-	"devorch/internal/okaon"
+	okaonsqlite "devorch/internal/okaon/sqlite"
 	"devorch/internal/provider"
 	"devorch/internal/provider/ollama"
 	"devorch/internal/provider/openai"
@@ -32,7 +32,7 @@ func WireMinimal(cfg config.Config) (*Deps, error) {
 		reg.Register(openrouter.New(cfg.OpenRouterKey))
 	}
 
-	okStore := okaon.NewStore(db.SQL)
+	okStore := okaonsqlite.NewStore(db.SQL)
 
 	// Step2: ensure ollama local provider
 	if !cfg.Local.OfflineMode {

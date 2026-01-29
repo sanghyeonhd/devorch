@@ -6,28 +6,39 @@ import (
 	"devorch/internal/okaon"
 )
 
+// OkAONAggregator는 OkAON 집계 기능을 제공하는 인터페이스
+type OkAONAggregator interface {
+	GetModelAggregate(ctx context.Context, since int64) ([]okaon.ModelAggregate, error)
+}
+
 type OkAONEnricher struct {
-	Store *okaon.Store
+	Store OkAONAggregator
 }
 
 func (e *OkAONEnricher) Enrich(ctx context.Context, policyKey string, c Candidate) (Candidate, string) {
 	if e == nil || e.Store == nil {
 		return c, "okaon:disabled"
 	}
-	agg, err := e.Store.AggregateRecent(ctx, policyKey, c.Provider, c.Model, 80)
-	if err != nil || agg.Count == 0 {
-		return c, "okaon:none"
+
+	// 최근 집계 데이터 조회
+	aggs, err := e.Store.GetModelAggregate(ctx, 0)
+	if err != nil {
+		return c, "okaon:error"
 	}
 
-	// Step1 heuristic: replace estimates with real observed aggregates
-	if agg.AvgLatMS > 0 {
-		c.EstLatencyMS = int(agg.AvgLatMS + 0.5)
+	// 해당 모델의 집계 찾기
+	for _, agg := range aggs {
+		if agg.Provider == c.Provider && agg.Model == c.Model {
+			// 집계 데이터로 추정치 업데이트
+			if agg.AvgLatencyMs > 0 {
+				c.EstLatencyMS = int(agg.AvgLatencyMs + 0.5)
+			}
+			c.EstQuality = clamp01(agg.AvgReward01)
+			return c, "okaon:applied"
+		}
 	}
-	c.EstQuality = clamp01(agg.AvgQual)
-	// success gets applied in scoring separately; cost stays 0 in step1
 
-	why := "okaon:applied"
-	return c, why
+	return c, "okaon:none"
 }
 
 func clamp01(v float64) float64 {

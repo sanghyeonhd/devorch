@@ -117,7 +117,7 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 0) // pull can be long
 		defer cancel()
 
-		p, ok := deps.ProviderRegistry.Get("ollama")
+		p, ok := deps.ProviderRegistry.GetProvider("ollama")
 		if !ok {
 			fmt.Println("ollama provider not registered")
 			os.Exit(1)
@@ -148,7 +148,7 @@ func main() {
 			os.Exit(2)
 		}
 
-		p, ok := deps.ProviderRegistry.Get(*provName)
+		p, ok := deps.ProviderRegistry.GetProvider(*provName)
 		if !ok {
 			fmt.Printf("provider not found: %s\n", *provName)
 			os.Exit(2)
