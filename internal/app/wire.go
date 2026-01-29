@@ -11,13 +11,20 @@ import (
 	"devorch/internal/global"
 	okaonsqlite "devorch/internal/okaon/sqlite"
 	"devorch/internal/provider"
+	"devorch/internal/provider/anthropic"
 	"devorch/internal/provider/azure"
+	"devorch/internal/provider/bedrock"
+	"devorch/internal/provider/cohere"
+	"devorch/internal/provider/copilot"
+	"devorch/internal/provider/gitlab"
 	"devorch/internal/provider/groq"
 	"devorch/internal/provider/mistral"
 	"devorch/internal/provider/ollama"
 	"devorch/internal/provider/openai"
 	"devorch/internal/provider/openrouter"
+	"devorch/internal/provider/perplexity"
 	"devorch/internal/provider/together"
+	"devorch/internal/provider/xai"
 	"devorch/internal/router"
 	"devorch/internal/session"
 	"devorch/internal/storage/sqlite"
@@ -67,6 +74,41 @@ func WireMinimal(cfg config.Config) (*Deps, error) {
 				Deployment: azureDeployment,
 			}))
 		}
+	}
+
+	// Anthropic Claude
+	if os.Getenv("ANTHROPIC_API_KEY") != "" {
+		reg.Register(anthropic.New())
+	}
+
+	// AWS Bedrock
+	if os.Getenv("AWS_ACCESS_KEY_ID") != "" || os.Getenv("AWS_PROFILE") != "" {
+		reg.Register(bedrock.New())
+	}
+
+	// Perplexity AI
+	if os.Getenv("PERPLEXITY_API_KEY") != "" {
+		reg.Register(perplexity.New())
+	}
+
+	// xAI (Grok)
+	if os.Getenv("XAI_API_KEY") != "" {
+		reg.Register(xai.New())
+	}
+
+	// GitHub Copilot
+	if os.Getenv("GITHUB_TOKEN") != "" || os.Getenv("COPILOT_TOKEN") != "" {
+		reg.Register(copilot.New())
+	}
+
+	// Cohere
+	if os.Getenv("COHERE_API_KEY") != "" {
+		reg.Register(cohere.New())
+	}
+
+	// GitLab AI
+	if os.Getenv("GITLAB_TOKEN") != "" || os.Getenv("CI_JOB_TOKEN") != "" {
+		reg.Register(gitlab.New())
 	}
 
 	okStore := okaonsqlite.NewStore(db.SQL)

@@ -1196,6 +1196,579 @@ func OneDarkTheme() Theme {
 	}
 }
 
+// KanagawaTheme returns the Kanagawa color scheme theme.
+// Based on https://github.com/rebelot/kanagawa.nvim
+func KanagawaTheme() Theme {
+	return Theme{
+		Title: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#957fb8")).
+			Padding(0, 1),
+
+		Footer: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#54546d")).
+			Padding(0, 1),
+
+		Border: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#363646")),
+
+		InputBox: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#7e9cd8")).
+			Padding(0, 1),
+
+		UserMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#98bb6c")).
+			Bold(true),
+
+		AssistantMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#dcd7ba")),
+
+		SystemMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#54546d")).
+			Italic(true),
+
+		Normal: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#dcd7ba")),
+
+		Selected: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#1f1f28")).
+			Background(lipgloss.Color("#7e9cd8")),
+
+		Subtle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#54546d")),
+
+		Accent: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#ffa066")).
+			Bold(true),
+
+		Help: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#7fb4ca")),
+
+		Error: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#e82424")).
+			Bold(true),
+
+		Success: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#98bb6c")).
+			Bold(true),
+
+		Warning: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#e6c384")),
+
+		CodeBlock: lipgloss.NewStyle().
+			Background(lipgloss.Color("#1f1f28")).
+			Foreground(lipgloss.Color("#dcd7ba")).
+			Padding(1, 2),
+
+		InlineCode: lipgloss.NewStyle().
+			Background(lipgloss.Color("#2a2a37")).
+			Foreground(lipgloss.Color("#957fb8")),
+	}
+}
+
+// FlexokiDarkTheme returns the Flexoki Dark color scheme theme.
+// Based on https://stephango.com/flexoki
+func FlexokiDarkTheme() Theme {
+	return Theme{
+		Title: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#d14d41")).
+			Padding(0, 1),
+
+		Footer: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#575653")).
+			Padding(0, 1),
+
+		Border: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#343331")),
+
+		InputBox: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#4385be")).
+			Padding(0, 1),
+
+		UserMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#879a39")).
+			Bold(true),
+
+		AssistantMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#cecdc3")),
+
+		SystemMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#575653")).
+			Italic(true),
+
+		Normal: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#cecdc3")),
+
+		Selected: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#100f0f")).
+			Background(lipgloss.Color("#4385be")),
+
+		Subtle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#575653")),
+
+		Accent: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#da702c")).
+			Bold(true),
+
+		Help: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#3aa99f")),
+
+		Error: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#d14d41")).
+			Bold(true),
+
+		Success: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#879a39")).
+			Bold(true),
+
+		Warning: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#d0a215")),
+
+		CodeBlock: lipgloss.NewStyle().
+			Background(lipgloss.Color("#100f0f")).
+			Foreground(lipgloss.Color("#cecdc3")).
+			Padding(1, 2),
+
+		InlineCode: lipgloss.NewStyle().
+			Background(lipgloss.Color("#1c1b1a")).
+			Foreground(lipgloss.Color("#8b7ec8")),
+	}
+}
+
+// FlexokiLightTheme returns the Flexoki Light color scheme theme.
+func FlexokiLightTheme() Theme {
+	return Theme{
+		Title: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#af3029")).
+			Padding(0, 1),
+
+		Footer: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#878580")).
+			Padding(0, 1),
+
+		Border: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#e6e4d9")),
+
+		InputBox: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#205ea6")).
+			Padding(0, 1),
+
+		UserMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#66800b")).
+			Bold(true),
+
+		AssistantMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#100f0f")),
+
+		SystemMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#878580")).
+			Italic(true),
+
+		Normal: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#100f0f")),
+
+		Selected: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#fffcf0")).
+			Background(lipgloss.Color("#205ea6")),
+
+		Subtle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#878580")),
+
+		Accent: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#bc5215")).
+			Bold(true),
+
+		Help: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#24837b")),
+
+		Error: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#af3029")).
+			Bold(true),
+
+		Success: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#66800b")).
+			Bold(true),
+
+		Warning: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#ad8301")),
+
+		CodeBlock: lipgloss.NewStyle().
+			Background(lipgloss.Color("#fffcf0")).
+			Foreground(lipgloss.Color("#100f0f")).
+			Padding(1, 2),
+
+		InlineCode: lipgloss.NewStyle().
+			Background(lipgloss.Color("#f2f0e5")).
+			Foreground(lipgloss.Color("#5e409d")),
+	}
+}
+
+// EverforestDarkTheme returns the Everforest Dark color scheme theme.
+// Based on https://github.com/sainnhe/everforest
+func EverforestDarkTheme() Theme {
+	return Theme{
+		Title: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#e67e80")).
+			Padding(0, 1),
+
+		Footer: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#859289")).
+			Padding(0, 1),
+
+		Border: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#374145")),
+
+		InputBox: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#83c092")).
+			Padding(0, 1),
+
+		UserMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#a7c080")).
+			Bold(true),
+
+		AssistantMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#d3c6aa")),
+
+		SystemMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#859289")).
+			Italic(true),
+
+		Normal: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#d3c6aa")),
+
+		Selected: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#2d353b")).
+			Background(lipgloss.Color("#83c092")),
+
+		Subtle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#859289")),
+
+		Accent: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#e69875")).
+			Bold(true),
+
+		Help: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#7fbbb3")),
+
+		Error: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#e67e80")).
+			Bold(true),
+
+		Success: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#a7c080")).
+			Bold(true),
+
+		Warning: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#dbbc7f")),
+
+		CodeBlock: lipgloss.NewStyle().
+			Background(lipgloss.Color("#2d353b")).
+			Foreground(lipgloss.Color("#d3c6aa")).
+			Padding(1, 2),
+
+		InlineCode: lipgloss.NewStyle().
+			Background(lipgloss.Color("#343f44")).
+			Foreground(lipgloss.Color("#d699b6")),
+	}
+}
+
+// AyuDarkTheme returns the Ayu Dark color scheme theme.
+// Based on https://github.com/ayu-theme/ayu-colors
+func AyuDarkTheme() Theme {
+	return Theme{
+		Title: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#ffb454")).
+			Padding(0, 1),
+
+		Footer: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#5c6773")).
+			Padding(0, 1),
+
+		Border: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#2d3640")),
+
+		InputBox: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#39bae6")).
+			Padding(0, 1),
+
+		UserMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#c2d94c")).
+			Bold(true),
+
+		AssistantMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#e6e1cf")),
+
+		SystemMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#5c6773")).
+			Italic(true),
+
+		Normal: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#e6e1cf")),
+
+		Selected: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#0a0e14")).
+			Background(lipgloss.Color("#39bae6")),
+
+		Subtle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#5c6773")),
+
+		Accent: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#f29668")).
+			Bold(true),
+
+		Help: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#95e6cb")),
+
+		Error: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#ff3333")).
+			Bold(true),
+
+		Success: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#c2d94c")).
+			Bold(true),
+
+		Warning: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#ffb454")),
+
+		CodeBlock: lipgloss.NewStyle().
+			Background(lipgloss.Color("#0a0e14")).
+			Foreground(lipgloss.Color("#e6e1cf")).
+			Padding(1, 2),
+
+		InlineCode: lipgloss.NewStyle().
+			Background(lipgloss.Color("#0d1017")).
+			Foreground(lipgloss.Color("#ffb454")),
+	}
+}
+
+// MaterialDarkTheme returns the Material Dark color scheme theme.
+func MaterialDarkTheme() Theme {
+	return Theme{
+		Title: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#c792ea")).
+			Padding(0, 1),
+
+		Footer: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#546e7a")).
+			Padding(0, 1),
+
+		Border: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#37474f")),
+
+		InputBox: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#82aaff")).
+			Padding(0, 1),
+
+		UserMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#c3e88d")).
+			Bold(true),
+
+		AssistantMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#eeffff")),
+
+		SystemMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#546e7a")).
+			Italic(true),
+
+		Normal: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#eeffff")),
+
+		Selected: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#263238")).
+			Background(lipgloss.Color("#82aaff")),
+
+		Subtle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#546e7a")),
+
+		Accent: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#f78c6c")).
+			Bold(true),
+
+		Help: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#89ddff")),
+
+		Error: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#f07178")).
+			Bold(true),
+
+		Success: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#c3e88d")).
+			Bold(true),
+
+		Warning: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#ffcb6b")),
+
+		CodeBlock: lipgloss.NewStyle().
+			Background(lipgloss.Color("#263238")).
+			Foreground(lipgloss.Color("#eeffff")).
+			Padding(1, 2),
+
+		InlineCode: lipgloss.NewStyle().
+			Background(lipgloss.Color("#37474f")).
+			Foreground(lipgloss.Color("#c792ea")),
+	}
+}
+
+// NightOwlTheme returns the Night Owl color scheme theme.
+// Based on https://github.com/sdras/night-owl-vscode-theme
+func NightOwlTheme() Theme {
+	return Theme{
+		Title: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#c792ea")).
+			Padding(0, 1),
+
+		Footer: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#637777")).
+			Padding(0, 1),
+
+		Border: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#122d42")),
+
+		InputBox: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#82aaff")).
+			Padding(0, 1),
+
+		UserMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#addb67")).
+			Bold(true),
+
+		AssistantMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#d6deeb")),
+
+		SystemMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#637777")).
+			Italic(true),
+
+		Normal: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#d6deeb")),
+
+		Selected: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#011627")).
+			Background(lipgloss.Color("#82aaff")),
+
+		Subtle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#637777")),
+
+		Accent: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#f78c6c")).
+			Bold(true),
+
+		Help: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#7fdbca")),
+
+		Error: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#ef5350")).
+			Bold(true),
+
+		Success: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#addb67")).
+			Bold(true),
+
+		Warning: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#ffcb8b")),
+
+		CodeBlock: lipgloss.NewStyle().
+			Background(lipgloss.Color("#011627")).
+			Foreground(lipgloss.Color("#d6deeb")).
+			Padding(1, 2),
+
+		InlineCode: lipgloss.NewStyle().
+			Background(lipgloss.Color("#0b2942")).
+			Foreground(lipgloss.Color("#c792ea")),
+	}
+}
+
+// GitHubDarkTheme returns the GitHub Dark color scheme theme.
+func GitHubDarkTheme() Theme {
+	return Theme{
+		Title: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#58a6ff")).
+			Padding(0, 1),
+
+		Footer: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#8b949e")).
+			Padding(0, 1),
+
+		Border: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#30363d")),
+
+		InputBox: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#58a6ff")).
+			Padding(0, 1),
+
+		UserMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#7ee787")).
+			Bold(true),
+
+		AssistantMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#c9d1d9")),
+
+		SystemMsg: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#8b949e")).
+			Italic(true),
+
+		Normal: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#c9d1d9")),
+
+		Selected: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#0d1117")).
+			Background(lipgloss.Color("#58a6ff")),
+
+		Subtle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#8b949e")),
+
+		Accent: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#ffa657")).
+			Bold(true),
+
+		Help: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#79c0ff")),
+
+		Error: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#f85149")).
+			Bold(true),
+
+		Success: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#7ee787")).
+			Bold(true),
+
+		Warning: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#d29922")),
+
+		CodeBlock: lipgloss.NewStyle().
+			Background(lipgloss.Color("#0d1117")).
+			Foreground(lipgloss.Color("#c9d1d9")).
+			Padding(1, 2),
+
+		InlineCode: lipgloss.NewStyle().
+			Background(lipgloss.Color("#161b22")).
+			Foreground(lipgloss.Color("#a5d6ff")),
+	}
+}
+
 // =============================================================================
 // Theme Registry
 // =============================================================================
@@ -1219,6 +1792,14 @@ func AvailableThemes() []string {
 		"solarized-light",
 		"rose-pine",
 		"one-dark",
+		"kanagawa",
+		"flexoki-dark",
+		"flexoki-light",
+		"everforest-dark",
+		"ayu-dark",
+		"material-dark",
+		"night-owl",
+		"github-dark",
 	}
 }
 
@@ -1255,6 +1836,22 @@ func GetTheme(name string) Theme {
 		return RosePineTheme()
 	case "one-dark":
 		return OneDarkTheme()
+	case "kanagawa":
+		return KanagawaTheme()
+	case "flexoki-dark":
+		return FlexokiDarkTheme()
+	case "flexoki-light":
+		return FlexokiLightTheme()
+	case "everforest-dark":
+		return EverforestDarkTheme()
+	case "ayu-dark":
+		return AyuDarkTheme()
+	case "material-dark":
+		return MaterialDarkTheme()
+	case "night-owl":
+		return NightOwlTheme()
+	case "github-dark":
+		return GitHubDarkTheme()
 	default:
 		return DefaultTheme()
 	}
