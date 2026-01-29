@@ -1,2 +1,12 @@
-ALTER TABLE tool_runs ADD COLUMN exit_code INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE tool_runs ADD COLUMN meta_json TEXT;
+-- 0011_toolruns_meta.sql
+-- NOTE: These columns were added to tool_runs in a previous migration run.
+-- SQLite does not support "ALTER TABLE ADD COLUMN IF NOT EXISTS".
+-- This migration is kept for reference but the actual ALTER statements
+-- have been moved to 0008_toolruns.sql or are already applied.
+-- 
+-- Original commands:
+-- ALTER TABLE tool_runs ADD COLUMN exit_code INTEGER NOT NULL DEFAULT 0;
+-- ALTER TABLE tool_runs ADD COLUMN meta_json TEXT;
+--
+-- If migrating fresh, columns should exist from prior successful migration.
+-- No-op: SELECT 1;

@@ -16,7 +16,11 @@ CREATE TABLE IF NOT EXISTS tool_runs (
   output_summary TEXT,
 
   output_bytes INTEGER NOT NULL DEFAULT 0,
-  tags TEXT
+  tags TEXT,
+  
+  -- Added from 0011 migration
+  exit_code INTEGER NOT NULL DEFAULT 0,
+  meta_json TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_tool_runs_ws_time ON tool_runs(workspace, started_at);

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"devorch/internal/app"
+	"devorch/internal/cli"
 	"devorch/internal/config"
 	"devorch/internal/log"
 	"devorch/internal/provider"
@@ -15,7 +16,7 @@ import (
 )
 
 func usage() {
-	fmt.Println(`devorch - local-first multi-LLM orchestrator (Step2)
+	fmt.Println(`devorch - local-first multi-LLM orchestrator (Phase 1-40 Complete)
 
 Usage:
   devorch doctor
@@ -23,18 +24,27 @@ Usage:
   devorch models --provider openai|openrouter|ollama
   devorch ollama-pull --model <model>
   devorch chat --provider openai|openrouter|ollama --model <model> --prompt "hi"
+  
+  devorch login --provider github|google|openai|anthropic
+  devorch login-status --provider github|google|openai|anthropic
+  devorch logout --provider github|google|openai|anthropic
+  
+  devorch bench --provider ollama --model llama3.2 --iterations 5
+  devorch stats --provider ollama --model llama3.2
 
 Env:
   DEVORCH_DB_PATH=./devorch.db
   DEVORCH_OFFLINE=1
   DEVORCH_AUTO_INSTALL=1
+  DEVORCH_DAEMON_ADDR=127.0.0.1:8787
   DEVORCH_OLLAMA_HOST=http://127.0.0.1:11434
   DEVORCH_OLLAMA_AUTOSTART=1
   DEVORCH_OLLAMA_BUNDLE=<path to ollama binary override>
 
   OPENAI_API_KEY=...
   OPENROUTER_API_KEY=...
-`)
+  ANTHROPIC_API_KEY=...
+  GOOGLE_API_KEY=...`)
 }
 
 func main() {
@@ -51,13 +61,63 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Commands that don't need full wire setup
+	cmd := os.Args[1]
+	daemonAddr := cfg.DaemonAddr
+	if daemonAddr == "" {
+		daemonAddr = "http://127.0.0.1:8787"
+	}
+
+	switch cmd {
+	case "login":
+		fs := flag.NewFlagSet("login", flag.ExitOnError)
+		provName := fs.String("provider", "", "github|google|openai|anthropic")
+		_ = fs.Parse(os.Args[2:])
+		if *provName == "" {
+			fmt.Println("missing --provider")
+			os.Exit(2)
+		}
+		if err := cli.Login(daemonAddr, *provName); err != nil {
+			log.Errorf("login failed: %v", err)
+			os.Exit(1)
+		}
+		return
+
+	case "login-status":
+		fs := flag.NewFlagSet("login-status", flag.ExitOnError)
+		provName := fs.String("provider", "", "github|google|openai|anthropic")
+		_ = fs.Parse(os.Args[2:])
+		if *provName == "" {
+			fmt.Println("missing --provider")
+			os.Exit(2)
+		}
+		if err := cli.LoginStatus(daemonAddr, *provName); err != nil {
+			log.Errorf("login-status failed: %v", err)
+			os.Exit(1)
+		}
+		return
+
+	case "logout":
+		fs := flag.NewFlagSet("logout", flag.ExitOnError)
+		provName := fs.String("provider", "", "github|google|openai|anthropic")
+		_ = fs.Parse(os.Args[2:])
+		if *provName == "" {
+			fmt.Println("missing --provider")
+			os.Exit(2)
+		}
+		if err := cli.Logout(daemonAddr, *provName); err != nil {
+			log.Errorf("logout failed: %v", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Commands that need wire setup
 	deps, err := app.WireMinimal(cfg)
 	if err != nil {
 		log.Errorf("wire failed: %v", err)
 		os.Exit(1)
 	}
-
-	cmd := os.Args[1]
 	switch cmd {
 	case "doctor":
 		// doctor is implemented in diagnostics (step1)
@@ -187,6 +247,93 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Println(resp.Text())
+
+	case "bench":
+		fs := flag.NewFlagSet("bench", flag.ExitOnError)
+		provName := fs.String("provider", "ollama", "provider name")
+		model := fs.String("model", "", "model id")
+		iterations := fs.Int("iterations", 3, "number of iterations")
+		_ = fs.Parse(os.Args[2:])
+		if *model == "" {
+			fmt.Println("missing --model")
+			os.Exit(2)
+		}
+
+		p, ok := deps.ProviderRegistry.GetProvider(*provName)
+		if !ok {
+			fmt.Printf("provider not found: %s\n", *provName)
+			os.Exit(2)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		fmt.Printf("Running benchmark: provider=%s model=%s iterations=%d\n", *provName, *model, *iterations)
+
+		var totalLatency int64
+		var successes int
+		for i := 0; i < *iterations; i++ {
+			req := provider.ChatRequest{
+				Model: *model,
+				Messages: []provider.ChatMessage{
+					{Role: "user", Content: "Say 'Hello' in one word."},
+				},
+				Temperature: 0.0,
+				MaxTokens:   10,
+			}
+			start := time.Now()
+			_, err := p.Chat(ctx, req)
+			latency := time.Since(start).Milliseconds()
+			totalLatency += latency
+			if err != nil {
+				fmt.Printf("  [%d/%d] FAIL: %v (latency: %dms)\n", i+1, *iterations, err, latency)
+			} else {
+				successes++
+				fmt.Printf("  [%d/%d] OK (latency: %dms)\n", i+1, *iterations, latency)
+			}
+		}
+		avgLatency := totalLatency / int64(*iterations)
+		successRate := float64(successes) / float64(*iterations) * 100
+		fmt.Printf("\nSummary: avg_latency=%dms success_rate=%.1f%%\n", avgLatency, successRate)
+
+	case "stats":
+		fs := flag.NewFlagSet("stats", flag.ExitOnError)
+		provName := fs.String("provider", "", "provider name (optional)")
+		model := fs.String("model", "", "model id (optional)")
+		limit := fs.Int("limit", 20, "max records to show")
+		_ = fs.Parse(os.Args[2:])
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		// Get stats from OkAON store
+		runs, err := deps.OkAONStore.QueryRuns(ctx, "", "", *limit)
+		if err != nil {
+			log.Errorf("stats failed: %v", err)
+			os.Exit(1)
+		}
+
+		if len(runs) == 0 {
+			fmt.Println("No runs recorded yet. Use 'devorch chat' to record runs.")
+			return
+		}
+
+		fmt.Println("Recent OkAON Runs:")
+		fmt.Println("------------------")
+		for _, r := range runs {
+			if *provName != "" && r.Provider != *provName {
+				continue
+			}
+			if *model != "" && r.Model != *model {
+				continue
+			}
+			status := "OK"
+			if !r.Success {
+				status = "FAIL"
+			}
+			fmt.Printf("[%s] %s/%s latency=%dms quality=%.2f cost=$%.6f\n",
+				status, r.Provider, r.Model, r.LatencyMs, r.Quality, float64(r.CostMicroUSD)/1e6)
+		}
 
 	default:
 		usage()

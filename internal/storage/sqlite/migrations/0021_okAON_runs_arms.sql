@@ -1,7 +1,8 @@
 -- 0021_okAON_runs_arms.sql
--- OkAON: 실측 러닝/벤치 데이터
+-- OkAON: 실측 러닝/벤치 데이터 (Phase 21 확장)
 
-CREATE TABLE IF NOT EXISTS okaon_runs (
+-- okaon_runs_v2: 간단한 실행 기록 테이블 (기존 okaon_runs와 별도)
+CREATE TABLE IF NOT EXISTS okaon_runs_v2 (
   run_id            TEXT PRIMARY KEY,
   fingerprint       TEXT NOT NULL,
   category          TEXT NOT NULL,
@@ -18,14 +19,14 @@ CREATE TABLE IF NOT EXISTS okaon_runs (
   ended_ts_utc      INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_okaon_runs_fp_cat_time
-ON okaon_runs(fingerprint, category, ended_ts_utc);
+CREATE INDEX IF NOT EXISTS idx_okaon_runs_v2_fp_cat_time
+ON okaon_runs_v2(fingerprint, category, ended_ts_utc);
 
-CREATE INDEX IF NOT EXISTS idx_okaon_runs_provider_model_time
-ON okaon_runs(provider, model, ended_ts_utc);
+CREATE INDEX IF NOT EXISTS idx_okaon_runs_v2_provider_model_time
+ON okaon_runs_v2(provider, model, ended_ts_utc);
 
--- arm stats: fingerprint+category 기준에서 provider/model arm 성능 통계
-CREATE TABLE IF NOT EXISTS okaon_arm_stats (
+-- okaon_arm_stats_v2: 간단한 arm 통계 (기존 테이블과 별도)
+CREATE TABLE IF NOT EXISTS okaon_arm_stats_v2 (
   fingerprint       TEXT NOT NULL,
   category          TEXT NOT NULL,
   provider          TEXT NOT NULL,
@@ -38,17 +39,17 @@ CREATE TABLE IF NOT EXISTS okaon_arm_stats (
   PRIMARY KEY (fingerprint, category, provider, model)
 );
 
-CREATE INDEX IF NOT EXISTS idx_okaon_arm_stats_fp_cat
-ON okaon_arm_stats(fingerprint, category);
+CREATE INDEX IF NOT EXISTS idx_okaon_arm_stats_v2_fp_cat
+ON okaon_arm_stats_v2(fingerprint, category);
 
--- (선택) reward 이벤트(모델스위치/리트라이소진 등) 저장용
-CREATE TABLE IF NOT EXISTS okaon_rewards (
+-- okaon_rewards_v2: reward 이벤트 (기존 테이블과 별도)
+CREATE TABLE IF NOT EXISTS okaon_rewards_v2 (
   id               TEXT PRIMARY KEY,
   run_id           TEXT NOT NULL,
-  kind             TEXT NOT NULL,   -- model_switch | retry_exhausted | ...
+  kind             TEXT NOT NULL,
   payload_json     TEXT NOT NULL,
   created_ts_utc   INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_okaon_rewards_run
-ON okaon_rewards(run_id, created_ts_utc);
+CREATE INDEX IF NOT EXISTS idx_okaon_rewards_v2_run
+ON okaon_rewards_v2(run_id, created_ts_utc);

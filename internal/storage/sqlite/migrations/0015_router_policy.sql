@@ -15,9 +15,13 @@ CREATE TABLE IF NOT EXISTS router_policy (
   sample_count INTEGER NOT NULL,
 
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  
+  -- Added from 0016 migration
+  scope_type TEXT NOT NULL DEFAULT 'global',
+  scope_id   TEXT NOT NULL DEFAULT '*',
 
   UNIQUE(os, arch, scenario, provider, model)
 );
 
-CREATE INDEX IF NOT EXISTS idx_router_policy_key
-  ON router_policy(os, arch, scenario);
+CREATE INDEX IF NOT EXISTS idx_router_policy_scope_key
+  ON router_policy(scope_type, scope_id, os, arch, scenario);

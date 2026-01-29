@@ -6,49 +6,135 @@ import (
 	"devorch/internal/hook/builtins"
 )
 
-// 실제 구현에서는 okAON.Reward를 직접 받도록 하는게 정석이지만,
-// 여기서는 hook 모듈이 okAON에 강결합되지 않게 "어댑터"로 처리합니다.
+// RewardStore is the adapter interface to avoid coupling with okAON
 type RewardStore interface {
 	builtins.SwitchStore
 	builtins.RetryStore
 }
 
+// Chain manages hook dispatch with built-in handlers
 type Chain struct {
-	Store RewardStore
+	Store    RewardStore
+	Registry *Registry
 }
 
+// NewChain creates a new hook chain with optional registry
+func NewChain(store RewardStore) *Chain {
+	return &Chain{
+		Store:    store,
+		Registry: NewRegistry(),
+	}
+}
+
+// DispatchInput defines input for legacy dispatch method
 type DispatchInput struct {
 	Type EventType
 
-	// 공통
+	// Common fields
 	RunID string
 
-	// 모델 스위치
+	// Model switch
 	FromModel   string
 	ToModel     string
 	Reason      string
 	ContextHash string
 
-	// 재시도 소진
+	// Retry exhausted
 	Message string
 }
 
+// Dispatch sends an event to built-in handlers and registered hooks
 func (c *Chain) Dispatch(ctx context.Context, in DispatchInput) error {
+	// Handle built-in events
 	switch in.Type {
 	case EventOnModelSwitch:
-		return builtins.OnModelSwitch(ctx, c.Store, builtins.ModelSwitchInput{
+		if err := builtins.OnModelSwitch(ctx, c.Store, builtins.ModelSwitchInput{
 			RunID:       in.RunID,
 			FromModel:   in.FromModel,
 			ToModel:     in.ToModel,
 			Reason:      in.Reason,
 			ContextHash: in.ContextHash,
-		})
+		}); err != nil {
+			return err
+		}
 	case EventOnRetryExhausted:
-		return builtins.OnRetryExhausted(ctx, c.Store, builtins.RetryExhaustedInput{
+		if err := builtins.OnRetryExhausted(ctx, c.Store, builtins.RetryExhaustedInput{
 			RunID:   in.RunID,
 			Message: in.Message,
-		})
-	default:
-		return nil
+		}); err != nil {
+			return err
+		}
 	}
+
+	// Dispatch to registered hooks
+	if c.Registry != nil {
+		_, err := c.Registry.Dispatch(ctx, in.Type, in)
+		return err
+	}
+
+	return nil
+}
+
+// DispatchEvent sends a typed event to registered hooks
+func (c *Chain) DispatchEvent(ctx context.Context, event EventType, data any) (any, error) {
+	if c.Registry == nil {
+		return data, nil
+	}
+	return c.Registry.Dispatch(ctx, event, data)
+}
+
+// DispatchPreToolUse dispatches pre tool use event
+func (c *Chain) DispatchPreToolUse(ctx context.Context, data PreToolUseData) (*PreToolUseData, error) {
+	result, err := c.DispatchEvent(ctx, EventPreToolUse, &data)
+	if err != nil {
+		return nil, err
+	}
+	if r, ok := result.(*PreToolUseData); ok {
+		return r, nil
+	}
+	return &data, nil
+}
+
+// DispatchPostToolUse dispatches post tool use event
+func (c *Chain) DispatchPostToolUse(ctx context.Context, data PostToolUseData) (*PostToolUseData, error) {
+	result, err := c.DispatchEvent(ctx, EventPostToolUse, &data)
+	if err != nil {
+		return nil, err
+	}
+	if r, ok := result.(*PostToolUseData); ok {
+		return r, nil
+	}
+	return &data, nil
+}
+
+// DispatchPromptSubmit dispatches prompt submit event
+func (c *Chain) DispatchPromptSubmit(ctx context.Context, data PromptSubmitData) (*PromptSubmitData, error) {
+	result, err := c.DispatchEvent(ctx, EventPromptSubmit, &data)
+	if err != nil {
+		return nil, err
+	}
+	if r, ok := result.(*PromptSubmitData); ok {
+		return r, nil
+	}
+	return &data, nil
+}
+
+// DispatchSessionStart dispatches session start event
+func (c *Chain) DispatchSessionStart(ctx context.Context, data SessionStartData) error {
+	_, err := c.DispatchEvent(ctx, EventSessionStart, data)
+	return err
+}
+
+// DispatchSessionStop dispatches session stop event
+func (c *Chain) DispatchSessionStop(ctx context.Context, data SessionStopData) error {
+	_, err := c.DispatchEvent(ctx, EventSessionStop, data)
+	return err
+}
+
+// RegisterHook registers a hook to the chain
+func (c *Chain) RegisterHook(h Hook) {
+	if c.Registry == nil {
+		c.Registry = NewRegistry()
+	}
+	c.Registry.Register(h)
 }

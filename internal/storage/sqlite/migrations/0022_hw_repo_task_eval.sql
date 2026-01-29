@@ -1,21 +1,24 @@
 -- Phase 33/34: HW Profile, Repo Fingerprint, and Task Evaluation columns
 -- Migration: 0022_hw_repo_task_eval.sql
 
-BEGIN;
+-- SQLite does not support IF NOT EXISTS for ALTER TABLE ADD COLUMN.
+-- Using a new table instead to avoid conflicts with existing okaon_runs schema.
 
--- Add hw_profile_hash to okaon_runs if not exists
-ALTER TABLE okaon_runs ADD COLUMN hw_profile_hash TEXT;
-ALTER TABLE okaon_runs ADD COLUMN hw_tier TEXT;
-ALTER TABLE okaon_runs ADD COLUMN repo_fingerprint TEXT;
-ALTER TABLE okaon_runs ADD COLUMN repo_lang TEXT;
-ALTER TABLE okaon_runs ADD COLUMN task_type TEXT;
-ALTER TABLE okaon_runs ADD COLUMN evaluator_name TEXT;
-ALTER TABLE okaon_runs ADD COLUMN eval_signals_json TEXT;
+-- Table for HW profile and repo context (linked to runs)
+CREATE TABLE IF NOT EXISTS okaon_run_context (
+    run_id TEXT PRIMARY KEY,
+    hw_profile_hash TEXT,
+    hw_tier TEXT,
+    repo_fingerprint TEXT,
+    repo_lang TEXT,
+    evaluator_name TEXT,
+    eval_signals_json TEXT,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+);
 
 -- Index for hw-based queries
-CREATE INDEX IF NOT EXISTS idx_okaon_runs_hw ON okaon_runs(hw_profile_hash);
-CREATE INDEX IF NOT EXISTS idx_okaon_runs_repo ON okaon_runs(repo_fingerprint);
-CREATE INDEX IF NOT EXISTS idx_okaon_runs_task_type ON okaon_runs(task_type);
+CREATE INDEX IF NOT EXISTS idx_okaon_run_context_hw ON okaon_run_context(hw_profile_hash);
+CREATE INDEX IF NOT EXISTS idx_okaon_run_context_repo ON okaon_run_context(repo_fingerprint);
 
 -- Table for storing evaluator results separately (for detailed analysis)
 CREATE TABLE IF NOT EXISTS okaon_eval_results (
@@ -25,11 +28,8 @@ CREATE TABLE IF NOT EXISTS okaon_eval_results (
     quality_score REAL NOT NULL,
     signals_json TEXT,
     notes_json TEXT,
-    created_at INTEGER NOT NULL,
-    FOREIGN KEY(run_id) REFERENCES okaon_runs(run_id) ON DELETE CASCADE
+    created_at INTEGER NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_okaon_eval_run ON okaon_eval_results(run_id);
 CREATE INDEX IF NOT EXISTS idx_okaon_eval_evaluator ON okaon_eval_results(evaluator_name);
-
-COMMIT;

@@ -6,15 +6,15 @@ import (
 
 // RunRow는 runs 조회 결과
 type RunRow struct {
-	RunID        string `json:"run_id"`
-	WorkID       string `json:"work_id"`
-	Provider     string `json:"provider"`
-	Model        string `json:"model"`
-	Success      bool   `json:"success"`
-	LatencyMs    int64  `json:"latency_ms"`
-	CostMicroUSD int64  `json:"cost_micro_usd"`
-	ErrorMsg     string `json:"error_msg"`
-	CreatedAt    int64  `json:"created_at"`
+	RunID        string  `json:"run_id"`
+	Provider     string  `json:"provider"`
+	Model        string  `json:"model"`
+	Success      bool    `json:"success"`
+	LatencyMs    int64   `json:"latency_ms"`
+	Quality      float64 `json:"quality"`
+	CostMicroUSD int64   `json:"cost_micro_usd"`
+	ErrorMsg     string  `json:"error_msg"`
+	CreatedAt    string  `json:"created_at"`
 }
 
 // QueryRuns는 최근 runs를 조회합니다
@@ -23,11 +23,12 @@ func (s *Store) QueryRuns(ctx context.Context, fingerprint, category string, lim
 		limit = 50
 	}
 
-	// 간단한 조회 - runs 테이블만 사용
+	// okaon_runs 테이블에서 조회
 	q := `
-SELECT id, work_id, provider, model,
-       CASE WHEN error_code = '' OR error_code IS NULL THEN 1 ELSE 0 END as success,
-       latency_ms, cost_micro_usd, COALESCE(error_msg, ''),
+SELECT run_id, provider, model,
+       ok as success,
+       latency_ms, quality, cost_micro_usd, 
+       COALESCE(error_message, ''),
        created_at
 FROM okaon_runs
 ORDER BY created_at DESC
@@ -44,9 +45,9 @@ LIMIT ?
 		var r RunRow
 		var successInt int
 		if err := rows.Scan(
-			&r.RunID, &r.WorkID, &r.Provider, &r.Model,
-			&successInt, &r.LatencyMs, &r.CostMicroUSD, &r.ErrorMsg,
-			&r.CreatedAt,
+			&r.RunID, &r.Provider, &r.Model,
+			&successInt, &r.LatencyMs, &r.Quality, &r.CostMicroUSD,
+			&r.ErrorMsg, &r.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
