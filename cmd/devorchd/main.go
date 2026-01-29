@@ -1,15 +1,22 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
+	"runtime"
 
 	"devorch/internal/app"
 	"devorch/internal/config"
+	"devorch/internal/global"
 	"devorch/internal/log"
 )
+
+//go:embed static
+var staticFS embed.FS
 
 func main() {
 	log.Init()
@@ -32,6 +39,30 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+
+	// System info endpoint
+	mux.HandleFunc("/api/system/info", func(w http.ResponseWriter, r *http.Request) {
+		profile, err := global.GetHWProfile()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		info := map[string]any{
+			"os":               runtime.GOOS,
+			"arch":             runtime.GOARCH,
+			"cpu_count":        profile.CPUCount,
+			"mem_total_mb":     profile.MemTotalMB,
+			"disk_total_gb":    profile.DiskTotalGB,
+			"disk_free_gb":     profile.DiskFreeGB,
+			"has_accel":        profile.HasAccel,
+			"accel_kind":       profile.AccelKind,
+			"tier":             profile.Tier(),
+			"can_run_local":    profile.CanRunLocalLLM(),
+			"recommended_size": profile.RecommendedModelSize(),
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(info)
+	})
 
 	// Health endpoint
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -115,7 +146,16 @@ func main() {
 		_ = json.NewEncoder(w).Encode(runs)
 	})
 
+	// Static files (Web UI) - must be last
+	staticContent, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		log.Errorf("failed to load static files: %v", err)
+		os.Exit(1)
+	}
+	mux.Handle("/", http.FileServer(http.FS(staticContent)))
+
 	log.Infof("devorchd listening on %s", addr)
+	log.Infof("Web UI available at http://%s/", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

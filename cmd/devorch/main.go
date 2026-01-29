@@ -8,29 +8,35 @@ import (
 	"time"
 
 	"devorch/internal/app"
+	"devorch/internal/autosetup"
 	"devorch/internal/cli"
 	"devorch/internal/config"
+	"devorch/internal/global"
 	"devorch/internal/log"
 	"devorch/internal/provider"
 	"devorch/internal/router"
+	"devorch/internal/tui"
 )
 
 func usage() {
-	fmt.Println(`devorch - local-first multi-LLM orchestrator (Phase 1-40 Complete)
+	fmt.Println(`devorch - local-first multi-LLM orchestrator
 
 Usage:
-  devorch doctor
-  devorch providers
-  devorch models --provider openai|openrouter|ollama
+  devorch                   # Start interactive TUI mode
+  devorch doctor            # Check system health
+  devorch providers         # List available providers
+  devorch models --provider <name>
   devorch ollama-pull --model <model>
-  devorch chat --provider openai|openrouter|ollama --model <model> --prompt "hi"
+  devorch chat --provider <name> --model <model> --prompt "..."
   
+  devorch connect           # Interactive provider setup
   devorch login --provider github|google|openai|anthropic
   devorch login-status --provider github|google|openai|anthropic
   devorch logout --provider github|google|openai|anthropic
   
   devorch bench --provider ollama --model llama3.2 --iterations 5
   devorch stats --provider ollama --model llama3.2
+  devorch setup             # Auto-detect hardware and setup optimal model
 
 Env:
   DEVORCH_DB_PATH=./devorch.db
@@ -39,7 +45,6 @@ Env:
   DEVORCH_DAEMON_ADDR=127.0.0.1:8787
   DEVORCH_OLLAMA_HOST=http://127.0.0.1:11434
   DEVORCH_OLLAMA_AUTOSTART=1
-  DEVORCH_OLLAMA_BUNDLE=<path to ollama binary override>
 
   OPENAI_API_KEY=...
   OPENROUTER_API_KEY=...
@@ -50,9 +55,16 @@ Env:
 func main() {
 	log.Init()
 
+	// No args: start TUI mode
 	if len(os.Args) < 2 {
+		startTUI()
+		return
+	}
+
+	// Handle --help and -h
+	if os.Args[1] == "--help" || os.Args[1] == "-h" {
 		usage()
-		os.Exit(2)
+		return
 	}
 
 	cfg, err := config.Load()
@@ -69,6 +81,15 @@ func main() {
 	}
 
 	switch cmd {
+	case "setup":
+		runAutoSetup()
+		return
+
+	case "connect":
+		// Interactive provider connection (like OpenCode's /connect)
+		runConnect()
+		return
+
 	case "login":
 		fs := flag.NewFlagSet("login", flag.ExitOnError)
 		provName := fs.String("provider", "", "github|google|openai|anthropic")
@@ -339,4 +360,136 @@ func main() {
 		usage()
 		os.Exit(2)
 	}
+}
+
+// startTUI starts the interactive TUI mode
+func startTUI() {
+	// Show welcome banner
+	theme := tui.DefaultTheme()
+
+	profile, err := global.GetHWProfile()
+	if err != nil {
+		tui.PrintError(err, theme)
+		os.Exit(1)
+	}
+
+	// Display system info banner
+	fmt.Println()
+	fmt.Println(theme.Title.Render("  🚀 DevOrch - AI Coding Agent  "))
+	fmt.Println(theme.Border.Render("────────────────────────────────────────"))
+	fmt.Printf("  %s %s/%s | %dGB RAM | %s\n",
+		theme.Subtle.Render("System:"),
+		profile.OS, profile.Arch,
+		profile.MemTotalMB/1024,
+		func() string {
+			if profile.HasAccel {
+				return profile.AccelKind + " GPU"
+			}
+			return "No GPU"
+		}())
+	fmt.Printf("  %s %s (auto-recommended)\n",
+		theme.Subtle.Render("Model Size:"),
+		theme.Accent.Render(profile.RecommendedModelSize()))
+	fmt.Printf("  %s %s\n",
+		theme.Subtle.Render("Tier:"),
+		theme.Success.Render(profile.Tier()))
+	fmt.Println(theme.Border.Render("────────────────────────────────────────"))
+	fmt.Println()
+
+	// Start interactive TUI
+	if err := tui.RunInteractive(""); err != nil {
+		tui.PrintError(err, theme)
+		os.Exit(1)
+	}
+}
+
+// runAutoSetup runs the automatic hardware detection and model setup
+func runAutoSetup() {
+	theme := tui.DefaultTheme()
+
+	fmt.Println()
+	fmt.Println(theme.Title.Render("  🔧 DevOrch Auto Setup  "))
+	fmt.Println()
+
+	result, err := autosetup.Run()
+	if err != nil {
+		tui.PrintError(err, theme)
+		os.Exit(1)
+	}
+
+	fmt.Println(theme.Success.Render("✓ Setup complete!"))
+	fmt.Printf("  Recommended model: %s\n", result.RecommendedModel)
+	fmt.Printf("  System tier: %s\n", result.Tier)
+	if result.OllamaInstalled {
+		fmt.Println(theme.Success.Render("  ✓ Ollama ready"))
+	}
+	if result.ModelInstalled {
+		fmt.Println(theme.Success.Render("  ✓ Model installed"))
+	}
+	fmt.Println()
+	fmt.Println("Run 'devorch' to start the interactive session.")
+}
+
+// runConnect handles interactive provider connection
+func runConnect() {
+	theme := tui.DefaultTheme()
+
+	fmt.Println()
+	fmt.Println(theme.Title.Render("  🔗 DevOrch Connect  "))
+	fmt.Println()
+	fmt.Println("Available providers:")
+	fmt.Println("  1. ollama      (local) - Free, runs on your machine")
+	fmt.Println("  2. openai      (cloud) - Requires API key")
+	fmt.Println("  3. anthropic   (cloud) - Requires API key")
+	fmt.Println("  4. openrouter  (cloud) - Requires API key")
+	fmt.Println("  5. google      (cloud) - Requires API key")
+	fmt.Println()
+
+	fmt.Print("Select provider (1-5) or name: ")
+	var input string
+	fmt.Scanln(&input)
+
+	var providerName string
+	switch input {
+	case "1", "ollama":
+		providerName = "ollama"
+		fmt.Println()
+		fmt.Println(theme.Success.Render("✓ Ollama is a local provider - no authentication needed."))
+		fmt.Println("  Make sure Ollama is running: ollama serve")
+		fmt.Println("  Install a model: ollama pull llama3.2:7b")
+		return
+	case "2", "openai":
+		providerName = "openai"
+	case "3", "anthropic":
+		providerName = "anthropic"
+	case "4", "openrouter":
+		providerName = "openrouter"
+	case "5", "google":
+		providerName = "google"
+	default:
+		providerName = input
+	}
+
+	fmt.Println()
+	fmt.Printf("To configure %s, set the API key:\n", providerName)
+	fmt.Println()
+
+	switch providerName {
+	case "openai":
+		fmt.Println("  export OPENAI_API_KEY=sk-...")
+		fmt.Println("  Get your key at: https://platform.openai.com/api-keys")
+	case "anthropic":
+		fmt.Println("  export ANTHROPIC_API_KEY=sk-ant-...")
+		fmt.Println("  Get your key at: https://console.anthropic.com/")
+	case "openrouter":
+		fmt.Println("  export OPENROUTER_API_KEY=sk-or-...")
+		fmt.Println("  Get your key at: https://openrouter.ai/keys")
+	case "google":
+		fmt.Println("  export GOOGLE_API_KEY=...")
+		fmt.Println("  Get your key at: https://aistudio.google.com/app/apikey")
+	default:
+		fmt.Printf("  Unknown provider: %s\n", providerName)
+	}
+	fmt.Println()
+	fmt.Println("After setting the key, restart devorch to use the provider.")
 }

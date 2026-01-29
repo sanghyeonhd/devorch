@@ -139,6 +139,33 @@ func (c *Client) Chat(ctx context.Context, req provider.ChatRequest) (provider.C
 	}, nil
 }
 
+// ChatWithQueryParam sends a chat completion request with an additional query parameter
+// Used for Azure OpenAI which requires api-version query param
+func (c *Client) ChatWithQueryParam(ctx context.Context, req provider.ChatRequest, key, value string) (provider.ChatResponse, error) {
+	var cr chatResp
+	payload := chatReq{
+		Model:       req.Model,
+		Messages:    req.Messages,
+		Temperature: req.Temperature,
+		MaxTokens:   req.MaxTokens,
+	}
+	path := fmt.Sprintf("/chat/completions?%s=%s", key, value)
+	if err := c.do(ctx, http.MethodPost, path, payload, &cr); err != nil {
+		return provider.ChatResponse{}, err
+	}
+	txt := ""
+	if len(cr.Choices) > 0 {
+		txt = cr.Choices[0].Message.Content
+	}
+	return provider.ChatResponse{
+		RawText:          txt,
+		PromptTokens:     cr.Usage.PromptTokens,
+		CompletionTokens: cr.Usage.CompletionTokens,
+		TotalTokens:      cr.Usage.TotalTokens,
+		CostMicroUSD:     0,
+	}, nil
+}
+
 func (c *Client) Health(ctx context.Context) error {
 	// simplest: list models with short timeout
 	_, err := c.ListModels(ctx)

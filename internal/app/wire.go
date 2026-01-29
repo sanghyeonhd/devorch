@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"runtime"
 	"time"
@@ -10,9 +11,13 @@ import (
 	"devorch/internal/global"
 	okaonsqlite "devorch/internal/okaon/sqlite"
 	"devorch/internal/provider"
+	"devorch/internal/provider/azure"
+	"devorch/internal/provider/groq"
+	"devorch/internal/provider/mistral"
 	"devorch/internal/provider/ollama"
 	"devorch/internal/provider/openai"
 	"devorch/internal/provider/openrouter"
+	"devorch/internal/provider/together"
 	"devorch/internal/router"
 	"devorch/internal/session"
 	"devorch/internal/storage/sqlite"
@@ -25,11 +30,43 @@ func WireMinimal(cfg config.Config) (*Deps, error) {
 	}
 
 	reg := provider.NewRegistry()
+
+	// OpenAI
 	if cfg.OpenAIKey != "" {
 		reg.Register(openai.New(cfg.OpenAIKey))
 	}
+
+	// OpenRouter
 	if cfg.OpenRouterKey != "" {
 		reg.Register(openrouter.New(cfg.OpenRouterKey))
+	}
+
+	// Groq (fast inference)
+	if groqKey := os.Getenv("GROQ_API_KEY"); groqKey != "" {
+		reg.Register(groq.New(groqKey))
+	}
+
+	// Together AI
+	if togetherKey := os.Getenv("TOGETHER_API_KEY"); togetherKey != "" {
+		reg.Register(together.New(togetherKey))
+	}
+
+	// Mistral AI
+	if mistralKey := os.Getenv("MISTRAL_API_KEY"); mistralKey != "" {
+		reg.Register(mistral.New(mistralKey))
+	}
+
+	// Azure OpenAI
+	if azureEndpoint := os.Getenv("AZURE_OPENAI_ENDPOINT"); azureEndpoint != "" {
+		azureKey := os.Getenv("AZURE_OPENAI_API_KEY")
+		azureDeployment := os.Getenv("AZURE_OPENAI_DEPLOYMENT")
+		if azureKey != "" && azureDeployment != "" {
+			reg.Register(azure.New(azure.Config{
+				Endpoint:   azureEndpoint,
+				APIKey:     azureKey,
+				Deployment: azureDeployment,
+			}))
+		}
 	}
 
 	okStore := okaonsqlite.NewStore(db.SQL)
