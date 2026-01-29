@@ -33,7 +33,7 @@ func (e *OkAONEnricher) Enrich(ctx context.Context, policyKey string, c Candidat
 			if agg.AvgLatencyMs > 0 {
 				c.EstLatencyMS = int(agg.AvgLatencyMs + 0.5)
 			}
-			c.EstQuality = clamp01(agg.AvgReward01)
+			c.EstQuality = clamp01Internal(agg.AvgReward01)
 			return c, "okaon:applied"
 		}
 	}
@@ -41,7 +41,7 @@ func (e *OkAONEnricher) Enrich(ctx context.Context, policyKey string, c Candidat
 	return c, "okaon:none"
 }
 
-func clamp01(v float64) float64 {
+func clamp01Internal(v float64) float64 {
 	if v < 0 {
 		return 0
 	}
