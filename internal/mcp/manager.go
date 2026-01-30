@@ -149,8 +149,20 @@ func (m *Manager) GetClient(ctx context.Context, name string) (*Client, error) {
 	return client, nil
 }
 
-// ListServers returns all configured server names
-func (m *Manager) ListServers() []string {
+// ListServers returns all configured servers with their configs
+func (m *Manager) ListServers() map[string]ServerConfig {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	result := make(map[string]ServerConfig)
+	for name, cfg := range m.config.Servers {
+		result[name] = cfg
+	}
+	return result
+}
+
+// ListServerNames returns all configured server names
+func (m *Manager) ListServerNames() []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

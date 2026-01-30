@@ -4,8 +4,11 @@ package tui
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"devorch/internal/auth"
 	"devorch/internal/editor"
+	"devorch/internal/mcp"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -118,6 +121,7 @@ func (c *CLIMode) handleCommand(input string) bool {
 	args := parts[1:]
 
 	switch cmdName {
+	// ====== 단축 명령어 (자주 사용) ======
 	case "exit", "quit", "q":
 		fmt.Println(c.theme.Subtle.Render("Goodbye!"))
 		os.Exit(0)
@@ -129,39 +133,6 @@ func (c *CLIMode) handleCommand(input string) bool {
 		c.messages = []Message{}
 		fmt.Println(c.theme.Success.Render("✓ Chat cleared"))
 
-	case "models":
-		c.listModels()
-
-	case "model":
-		if len(args) > 0 {
-			c.setModel(args[0])
-		} else {
-			c.listModels()
-		}
-
-	case "connect":
-		c.showConnect()
-
-	case "provider":
-		if len(args) > 0 {
-			c.setProvider(args[0])
-		} else {
-			c.showProviders()
-		}
-
-	case "themes":
-		c.listThemes()
-
-	case "theme":
-		if len(args) > 0 {
-			c.setTheme(args[0])
-		} else {
-			c.listThemes()
-		}
-
-	case "status":
-		c.showStatus()
-
 	case "new":
 		c.messages = []Message{}
 		fmt.Println(c.theme.Success.Render("✓ New session started"))
@@ -169,122 +140,194 @@ func (c *CLIMode) handleCommand(input string) bool {
 	case "history":
 		c.showHistory()
 
+	case "init":
+		c.initProject()
+
+	// ====== 통합 명령어 그룹 ======
+	case "session":
+		c.handleSessionCommand(args)
+
+	case "model":
+		c.handleModelCommand(args)
+
+	case "provider":
+		c.handleProviderCommand(args)
+
+	case "agent":
+		c.handleAgentCommand(args)
+
+	case "code":
+		c.handleCodeCommand(args)
+
+	case "context":
+		c.handleContextCommand(args)
+
+	case "tools":
+		c.handleToolsCommand(args)
+
+	case "config":
+		c.handleConfigCommand(args)
+
+	case "auth":
+		c.handleAuthCommand(args)
+
+	case "system":
+		c.handleSystemCommand(args)
+
+	// ====== 기존 명령어 (하위 호환성 - deprecated tips) ======
+	case "models":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /model list instead"))
+		c.listModels()
+
+	case "connect":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /provider connect instead"))
+		c.showConnect()
+
+	case "themes":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /config themes instead"))
+		c.listThemes()
+
+	case "theme":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /config theme <name> instead"))
+		if len(args) > 0 {
+			c.setTheme(args[0])
+		} else {
+			c.listThemes()
+		}
+
+	case "status":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /system status instead"))
+		c.showStatus()
+
 	case "disconnect":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /provider disconnect <name> instead"))
 		if len(args) > 0 {
 			c.disconnectProvider(args[0])
 		} else {
 			fmt.Println(c.theme.Warning.Render("⚠ Usage: /disconnect <provider>"))
 		}
 
-	// OpenCode compatible commands
 	case "agents":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /agent list instead"))
 		c.showAgents()
 
 	case "sessions":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /session list instead"))
 		c.showSessions()
 
 	case "editor":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /code editor instead"))
 		c.showEditor()
 
-	case "init":
-		c.initProject()
-
 	case "mcps", "mcp":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /tools mcp instead"))
 		c.showMCPs()
 
 	case "review":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /code review instead"))
 		c.reviewCode(args)
 
 	case "compact":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /session compact instead"))
 		c.compactHistory()
 
 	case "save":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /session save instead"))
 		c.saveSession(args)
 
 	case "export":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /session export instead"))
 		c.exportSession(args)
 
 	case "undo":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /session undo instead"))
 		c.undoLast()
 
 	case "redo":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /session redo instead"))
 		c.redoLast()
 
 	case "files":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /code files instead"))
 		c.listFiles(args)
 
 	case "grep":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /code grep instead"))
 		c.grepSearch(args)
 
 	case "ls":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /code ls instead"))
 		c.listDirectory(args)
 
 	case "diff":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /code diff instead"))
 		c.showDiff(args)
 
 	case "git":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /code git instead"))
 		c.gitCommand(args)
 
 	case "thinking":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /context thinking instead"))
 		c.toggleThinking()
 
-	case "context":
-		c.showContext()
-
 	case "memory":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /context memory instead"))
 		c.showMemory()
 
 	case "add":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /context add instead"))
 		c.addToContext(args)
 
 	case "settings":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /config instead"))
 		c.showSettings()
 
-	case "config":
-		c.editConfig(args)
-
-	case "tools":
-		c.showTools()
-
 	case "lsp":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /tools lsp instead"))
 		c.showLSP()
 
+	case "permissions", "perm":
+		c.showPermissions(args)
+
 	case "doctor":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /system doctor instead"))
 		c.runDoctor()
 
 	case "version":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /system version instead"))
 		c.showVersion()
 
 	case "install":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /model install instead"))
 		c.installModel(args)
 
 	case "bench":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /system bench instead"))
 		c.runBenchmark(args)
 
-	// Additional DevOrch commands
 	case "reset":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /session reset instead"))
 		c.resetSession()
 
 	case "share":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /session share instead"))
 		c.shareSession(args)
 
 	case "unshare":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /session unshare instead"))
 		c.unshareSession(args)
 
 	case "details":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /session details instead"))
 		c.showDetails()
 
 	case "providers":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /provider list instead"))
 		c.showProviders()
 
-	case "agent":
-		if len(args) > 0 {
-			c.setAgent(args[0])
-		} else {
-			c.showAgents()
-		}
-
 	case "language", "lang":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /config language instead"))
 		if len(args) > 0 {
 			c.setLanguage(args[0])
 		} else {
@@ -292,15 +335,15 @@ func (c *CLIMode) handleCommand(input string) bool {
 		}
 
 	case "login":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /auth login instead"))
 		c.loginProvider(args)
 
 	case "logout", "loginout":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /auth logout instead"))
 		c.logoutProvider(args)
 
-	case "auth":
-		c.showAuthStatus()
-
 	case "setup":
+		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /system setup instead"))
 		c.runSetup()
 
 	default:
@@ -311,145 +354,459 @@ func (c *CLIMode) handleCommand(input string) bool {
 	return true
 }
 
-// printHelp prints available commands
+// Grouped command handlers follow: these map subcommands into existing legacy handlers.
+func (c *CLIMode) handleSessionCommand(args []string) {
+	if len(args) == 0 {
+		fmt.Println(c.theme.Accent.Render("📝 Session Commands:"))
+		fmt.Println("  /session new                 Start a new session")
+		fmt.Println("  /session list                Show saved sessions")
+		fmt.Println("  /session save [name]         Save current session")
+		fmt.Println("  /session export [fmt]        Export (json/md)")
+		fmt.Println("  /session share               Share session")
+		fmt.Println("  /session unshare             Stop sharing")
+		fmt.Println("  /session compact             Compact history")
+		fmt.Println("  /session details             Show session info")
+		fmt.Println("  /session reset               Reset completely")
+		fmt.Println("  /session undo                Undo last action")
+		fmt.Println("  /session redo                Redo last action")
+		fmt.Println("  /session history             Show chat history")
+		fmt.Println("  /session clear               Clear chat")
+		return
+	}
+
+	switch args[0] {
+	case "help":
+		fmt.Println(c.theme.Accent.Render("📝 Session Commands:"))
+		fmt.Println("  /session new                 Start a new session")
+		fmt.Println("  /session list                Show saved sessions")
+		fmt.Println("  /session save [name]         Save current session")
+		fmt.Println("  /session export [fmt]        Export (json/md)")
+		fmt.Println("  /session share               Share session")
+		fmt.Println("  /session unshare             Stop sharing")
+		fmt.Println("  /session compact             Compact history")
+		fmt.Println("  /session details             Show session info")
+		fmt.Println("  /session reset               Reset completely")
+		fmt.Println("  /session undo                Undo last action")
+		fmt.Println("  /session redo                Redo last action")
+		fmt.Println("  /session history             Show chat history")
+		fmt.Println("  /session clear               Clear chat")
+	case "new":
+		c.messages = []Message{}
+		fmt.Println(c.theme.Success.Render("✓ New session started"))
+	case "save":
+		c.saveSession(args[1:])
+	case "export":
+		c.exportSession(args[1:])
+	case "share":
+		c.shareSession(args[1:])
+	case "unshare":
+		c.unshareSession(args[1:])
+	case "list", "sessions":
+		c.showSessions()
+	case "clear":
+		c.messages = []Message{}
+		fmt.Println(c.theme.Success.Render("✓ Chat cleared"))
+	case "compact":
+		c.compactHistory()
+	case "details":
+		c.showDetails()
+	case "undo":
+		c.undoLast()
+	case "redo":
+		c.redoLast()
+	case "reset":
+		c.resetSession()
+	case "history":
+		c.showHistory()
+	default:
+		fmt.Printf("Unknown session command: %s. Use /session help for details.\n", args[0])
+	}
+}
+
+func (c *CLIMode) handleModelCommand(args []string) {
+	if len(args) == 0 {
+		c.showCurrentModel()
+		return
+	}
+	if args[0] == "help" {
+		fmt.Println(c.theme.Accent.Render("📦 Model Commands:"))
+		fmt.Println("  /model                      Show current model")
+		fmt.Println("  /model list                 List available models")
+		fmt.Println("  /model set <name>           Switch to model")
+		fmt.Println("  /model <name>               Switch to model (shortcut)")
+		fmt.Println("  /model install <name>       Install a model")
+		fmt.Println("  /model bench [name]         Run benchmark")
+		return
+	}
+	switch args[0] {
+	case "list":
+		c.listModels()
+	case "set":
+		if len(args) > 1 {
+			c.setModel(args[1])
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /model set <name>"))
+			c.listModels()
+		}
+	case "install":
+		if len(args) > 1 {
+			c.installModel(args[1:])
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /model install <name>"))
+		}
+	case "bench":
+		c.runBenchmark(args[1:])
+	default:
+		// Allow direct model name: /model llama3.2
+		c.setModel(args[0])
+	}
+}
+
+func (c *CLIMode) handleProviderCommand(args []string) {
+	if len(args) == 0 {
+		c.showCurrentProvider()
+		return
+	}
+	if args[0] == "help" {
+		fmt.Println(c.theme.Accent.Render("🔗 Provider Commands:"))
+		fmt.Println("  /provider                   Show current provider")
+		fmt.Println("  /provider list              List all providers")
+		fmt.Println("  /provider set <name>        Switch to provider")
+		fmt.Println("  /provider connect           Connect new provider")
+		fmt.Println("  /provider disconnect <name> Disconnect provider")
+		return
+	}
+	switch args[0] {
+	case "list":
+		c.showProviders()
+	case "set":
+		if len(args) > 1 {
+			c.setProvider(args[1])
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /provider set <name>"))
+			c.showProviders()
+		}
+	case "connect":
+		c.showConnect()
+	case "disconnect":
+		if len(args) > 1 {
+			c.disconnectProvider(args[1])
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /provider disconnect <name>"))
+		}
+	default:
+		// Allow direct provider name: /provider openai
+		c.setProvider(args[0])
+	}
+}
+
+func (c *CLIMode) handleAgentCommand(args []string) {
+	if len(args) == 0 {
+		c.showCurrentAgent()
+		return
+	}
+	if args[0] == "help" {
+		fmt.Println(c.theme.Accent.Render("🤖 Agent Commands:"))
+		fmt.Println("  /agent                      Show current agent")
+		fmt.Println("  /agent list                 List all AI agents")
+		fmt.Println("  /agent set <name>           Switch to agent")
+		fmt.Println("  /agent <name>               Switch to agent (shortcut)")
+		return
+	}
+	switch args[0] {
+	case "list":
+		c.showAgents()
+	case "set":
+		if len(args) > 1 {
+			c.setAgent(args[1])
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /agent set <name>"))
+			c.showAgents()
+		}
+	default:
+		// Allow direct agent name: /agent coder
+		c.setAgent(args[0])
+	}
+}
+
+func (c *CLIMode) handleCodeCommand(args []string) {
+	if len(args) == 0 || args[0] == "help" {
+		fmt.Println(c.theme.Accent.Render("💻 Code Commands:"))
+		fmt.Println("  /code files [path]          List project files")
+		fmt.Println("  /code ls [path]             List directory")
+		fmt.Println("  /code grep <pattern>        Search in files")
+		fmt.Println("  /code diff [file]           Show file diff")
+		fmt.Println("  /code git <cmd>             Run git command")
+		fmt.Println("  /code review [file]         Review code")
+		fmt.Println("  /code editor                Open in external editor")
+		fmt.Println("  /code init                  Initialize project")
+		return
+	}
+	switch args[0] {
+	case "files":
+		c.listFiles(args[1:])
+	case "ls":
+		c.listDirectory(args[1:])
+	case "grep":
+		c.grepSearch(args[1:])
+	case "diff":
+		c.showDiff(args[1:])
+	case "git":
+		c.gitCommand(args[1:])
+	case "review":
+		c.reviewCode(args[1:])
+	case "editor":
+		c.showEditor()
+	case "init":
+		c.initProject()
+	default:
+		fmt.Printf("Unknown code command: %s. Use /code help for details.\n", args[0])
+	}
+}
+
+func (c *CLIMode) handleContextCommand(args []string) {
+	if len(args) == 0 {
+		c.showContext()
+		return
+	}
+	if args[0] == "help" {
+		fmt.Println(c.theme.Accent.Render("📋 Context Commands:"))
+		fmt.Println("  /context                    Show current context")
+		fmt.Println("  /context show               Show current context")
+		fmt.Println("  /context memory             Show memory/history")
+		fmt.Println("  /context add <file>         Add file to context")
+		fmt.Println("  /context thinking           Toggle thinking mode")
+		fmt.Println("  /context settings           Show settings")
+		return
+	}
+	switch args[0] {
+	case "show":
+		c.showContext()
+	case "memory":
+		c.showMemory()
+	case "add":
+		c.addToContext(args[1:])
+	case "thinking":
+		c.toggleThinking()
+	case "settings":
+		c.showSettings()
+	default:
+		fmt.Printf("Unknown context command: %s. Use /context help for details.\n", args[0])
+	}
+}
+
+func (c *CLIMode) handleToolsCommand(args []string) {
+	if len(args) == 0 {
+		c.showTools()
+		return
+	}
+	if args[0] == "help" {
+		fmt.Println(c.theme.Accent.Render("🔧 Tools Commands:"))
+		fmt.Println("  /tools                      List available tools")
+		fmt.Println("  /tools list                 List available tools")
+		fmt.Println("  /tools mcp                  List MCP servers")
+		fmt.Println("  /tools mcp call <srv> <tool> Call MCP tool")
+		fmt.Println("  /tools lsp                  LSP status")
+		return
+	}
+	switch args[0] {
+	case "list":
+		c.showTools()
+	case "mcps", "mcp":
+		c.showMCPs()
+	case "lsp":
+		c.showLSP()
+	default:
+		fmt.Printf("Unknown tools command: %s. Use /tools help for details.\n", args[0])
+	}
+}
+
+func (c *CLIMode) handleConfigCommand(args []string) {
+	if len(args) == 0 {
+		c.showSettings()
+		return
+	}
+	if args[0] == "help" {
+		fmt.Println(c.theme.Accent.Render("⚙️ Config Commands:"))
+		fmt.Println("  /config                     Show current settings")
+		fmt.Println("  /config show                Show current settings")
+		fmt.Println("  /config theme <name>        Set theme")
+		fmt.Println("  /config theme list          List all themes")
+		fmt.Println("  /config themes              List all themes")
+		fmt.Println("  /config lang <lang>         Set language (en/ko/ja/zh)")
+		fmt.Println("  /config edit [key]          Edit config file")
+		return
+	}
+	switch args[0] {
+	case "show":
+		c.showSettings()
+	case "themes":
+		c.listThemes()
+	case "theme":
+		if len(args) > 1 {
+			if args[1] == "list" {
+				c.listThemes()
+			} else {
+				c.setTheme(args[1])
+			}
+		} else {
+			c.listThemes()
+		}
+	case "lang", "language":
+		if len(args) > 1 {
+			c.setLanguage(args[1])
+		} else {
+			c.showLanguage()
+		}
+	case "edit":
+		c.editConfig(args[1:])
+	default:
+		fmt.Printf("Unknown config command: %s. Use /config help for details.\n", args[0])
+	}
+}
+
+func (c *CLIMode) handleAuthCommand(args []string) {
+	if len(args) == 0 {
+		c.showAuthStatus()
+		return
+	}
+	if args[0] == "help" {
+		fmt.Println(c.theme.Accent.Render("🔐 Auth Commands:"))
+		fmt.Println("  /auth                       Show auth status")
+		fmt.Println("  /auth status                Show auth status")
+		fmt.Println("  /auth login [provider]      Login to provider")
+		fmt.Println("  /auth logout [provider]     Logout from provider")
+		return
+	}
+	switch args[0] {
+	case "status":
+		c.showAuthStatus()
+	case "login":
+		c.loginProvider(args[1:])
+	case "logout":
+		c.logoutProvider(args[1:])
+	default:
+		fmt.Printf("Unknown auth command: %s. Use /auth help for details.\n", args[0])
+	}
+}
+
+func (c *CLIMode) handleSystemCommand(args []string) {
+	if len(args) == 0 || args[0] == "help" {
+		fmt.Println(c.theme.Accent.Render("🎮 System Commands:"))
+		fmt.Println("  /system status              Show system status")
+		fmt.Println("  /system setup               Run initial setup")
+		fmt.Println("  /system doctor              Run diagnostics")
+		fmt.Println("  /system version             Show version")
+		fmt.Println("  /system install <model>     Install model")
+		fmt.Println("  /system bench [model]       Run benchmark")
+		return
+	}
+	switch args[0] {
+	case "status":
+		c.showStatus()
+	case "setup":
+		c.runSetup()
+	case "doctor":
+		c.runDoctor()
+	case "version":
+		c.showVersion()
+	case "install":
+		c.installModel(args[1:])
+	case "bench":
+		c.runBenchmark(args[1:])
+	default:
+		fmt.Printf("Unknown system command: %s. Use /system help for details.\n", args[0])
+	}
+}
+
+// printHelp prints available commands - 16 core command groups
 func (c *CLIMode) printHelp() {
 	fmt.Println()
-	fmt.Println(c.theme.Title.Render("  📚 Available Commands  "))
+	fmt.Println(c.theme.Title.Render("  📚 DevOrch Commands  "))
+	fmt.Println(c.theme.Border.Render("════════════════════════════════════════════════════════"))
 	fmt.Println()
 
-	categories := []struct {
-		name     string
-		commands []struct {
-			cmd  string
-			desc string
-		}
+	// Quick shortcuts (most used)
+	fmt.Println(c.theme.Accent.Render("⌨️  Quick:"))
+	quickCmds := []struct {
+		cmd  string
+		desc string
 	}{
-		{
-			name: "Session",
-			commands: []struct {
-				cmd  string
-				desc string
-			}{
-				{"/help", "Show this help"},
-				{"/exit", "Exit DevOrch"},
-				{"/new", "Start new session"},
-				{"/reset", "Reset session completely"},
-				{"/sessions", "List saved sessions"},
-				{"/save [name]", "Save current session"},
-				{"/export [format]", "Export session (json/md)"},
-				{"/share", "Share session"},
-				{"/unshare", "Unshare session"},
-				{"/clear", "Clear chat history"},
-				{"/compact", "Compact chat history"},
-				{"/details", "Show session details"},
-				{"/undo", "Undo last action"},
-				{"/redo", "Redo last action"},
-			},
-		},
-		{
-			name: "Models & Providers",
-			commands: []struct {
-				cmd  string
-				desc string
-			}{
-				{"/models", "List available models"},
-				{"/model <name>", "Switch model"},
-				{"/providers", "List all providers"},
-				{"/provider <name>", "Switch provider"},
-				{"/connect", "Connect provider (OAuth/API)"},
-				{"/disconnect <name>", "Disconnect provider"},
-			},
-		},
-		{
-			name: "Agents",
-			commands: []struct {
-				cmd  string
-				desc string
-			}{
-				{"/agents", "List AI agents"},
-				{"/agent <name>", "Switch agent mode"},
-			},
-		},
-		{
-			name: "Code & Files",
-			commands: []struct {
-				cmd  string
-				desc string
-			}{
-				{"/files [path]", "List project files"},
-				{"/ls [path]", "List directory"},
-				{"/grep <pattern>", "Search in files"},
-				{"/diff [file]", "Show file diff"},
-				{"/git <cmd>", "Git commands"},
-				{"/review [file]", "Review code"},
-				{"/editor", "Open in editor"},
-				{"/init", "Initialize project"},
-			},
-		},
-		{
-			name: "Tools & MCP",
-			commands: []struct {
-				cmd  string
-				desc string
-			}{
-				{"/mcps", "Manage MCP servers"},
-				{"/tools", "List available tools"},
-				{"/lsp", "LSP status"},
-			},
-		},
-		{
-			name: "Context & Memory",
-			commands: []struct {
-				cmd  string
-				desc string
-			}{
-				{"/context", "Show current context"},
-				{"/memory", "Show memory/history"},
-				{"/add <file>", "Add file to context"},
-				{"/thinking", "Toggle thinking mode"},
-			},
-		},
-		{
-			name: "Auth & Config",
-			commands: []struct {
-				cmd  string
-				desc string
-			}{
-				{"/login [provider]", "Login to provider"},
-				{"/logout [provider]", "Logout from provider"},
-				{"/auth", "Show auth status"},
-				{"/settings", "Show settings"},
-				{"/config [key]", "Edit config"},
-				{"/language [lang]", "Set language (en/ko/ja)"},
-				{"/themes", "List themes"},
-				{"/theme <name>", "Switch theme"},
-			},
-		},
-		{
-			name: "System",
-			commands: []struct {
-				cmd  string
-				desc string
-			}{
-				{"/status", "Show system status"},
-				{"/setup", "Run initial setup"},
-				{"/doctor", "Run diagnostics"},
-				{"/version", "Show version"},
-				{"/install <model>", "Install model"},
-				{"/bench [model]", "Run benchmark"},
-			},
-		},
+		{"/help", "Show this help"},
+		{"/exit", "Exit DevOrch"},
+		{"/clear", "Clear chat"},
+		{"/new", "New session"},
+		{"/init", "Initialize project"},
+		{"/history", "Show chat history"},
 	}
+	for _, cmd := range quickCmds {
+		fmt.Printf("  %-18s %s\n",
+			c.theme.Title.Render(cmd.cmd),
+			c.theme.Subtle.Render(cmd.desc))
+	}
+	fmt.Println()
 
-	for _, cat := range categories {
-		fmt.Printf("%s\n", c.theme.Accent.Render(cat.name+":"))
-		for _, cmd := range cat.commands {
-			fmt.Printf("  %s  %s\n",
-				c.theme.Title.Render(fmt.Sprintf("%-20s", cmd.cmd)),
-				c.theme.Subtle.Render(cmd.desc))
-		}
-		fmt.Println()
+	// Main Commands (10 core groups)
+	fmt.Println(c.theme.Accent.Render("🎯 Main Commands:"))
+	mainCmds := []struct {
+		cmd  string
+		desc string
+	}{
+		{"/session", "Session management (new, list, save, export...)"},
+		{"/model", "Model management (list, set, install, bench)"},
+		{"/provider", "Provider management (list, connect, disconnect)"},
+		{"/agent", "Agent management (list, set)"},
+		{"/code", "Code/file operations (files, grep, diff, review, git)"},
+		{"/context", "Context management (add, memory, thinking)"},
+		{"/tools", "Tool management (mcp, lsp)"},
+		{"/config", "Configuration (theme, lang, edit)"},
+		{"/auth", "Authentication (login, logout, status)"},
+		{"/system", "System (status, setup, doctor, version)"},
 	}
+	for _, cmd := range mainCmds {
+		fmt.Printf("  %-18s %s\n",
+			c.theme.Title.Render(cmd.cmd),
+			c.theme.Subtle.Render(cmd.desc))
+	}
+	fmt.Println()
+
+	// Examples
+	fmt.Println(c.theme.Accent.Render("📝 Examples:"))
+	examples := []struct {
+		cmd  string
+		desc string
+	}{
+		{"/model list", "List all models"},
+		{"/model llama3.2:7b", "Switch to model"},
+		{"/code grep \"TODO\"", "Search in files"},
+		{"/session save my-work", "Save current session"},
+		{"/provider connect", "Connect new provider"},
+		{"/config theme dracula", "Change theme"},
+	}
+	for _, ex := range examples {
+		fmt.Printf("  %-26s %s\n",
+			c.theme.Title.Render(ex.cmd),
+			c.theme.Subtle.Render(ex.desc))
+	}
+	fmt.Println()
+
+	fmt.Println(c.theme.Border.Render("────────────────────────────────────────────────────────"))
+	fmt.Println(c.theme.Subtle.Render("Type \"/command help\" for subcommand details (e.g., /session help)"))
+	fmt.Println(c.theme.Subtle.Render("Legacy commands still work but show migration tips."))
+	fmt.Println()
+}
+
+// showCurrentModel displays the current model
+func (c *CLIMode) showCurrentModel() {
+	fmt.Println()
+	fmt.Println(c.theme.Title.Render("  📦 Current Model  "))
+	fmt.Println()
+	fmt.Printf("  Provider: %s\n", c.theme.Accent.Render(c.provider))
+	fmt.Printf("  Model:    %s\n", c.theme.Accent.Render(c.model))
+	fmt.Println()
+	fmt.Println(c.theme.Subtle.Render("  Use /model list to see available models"))
+	fmt.Println(c.theme.Subtle.Render("  Use /model <name> to switch models"))
+	fmt.Println()
 }
 
 // listModels lists available models
@@ -500,12 +857,27 @@ func (c *CLIMode) setModel(model string) {
 	}
 
 	if !found {
-		// Allow setting model even if not in list (might be pulling)
+		// Warn about non-existent model but allow setting (might be pulling)
+		fmt.Printf("%s Model '%s' not found in installed models\n", c.theme.Warning.Render("⚠"), model)
+		fmt.Println(c.theme.Subtle.Render("  Setting anyway (model may be downloading or remote)"))
 		c.model = model
 	}
 
 	SetActiveProvider(c.provider, c.model)
 	fmt.Printf("%s Model set to: %s\n", c.theme.Success.Render("✓"), c.model)
+}
+
+// showCurrentProvider displays the current provider
+func (c *CLIMode) showCurrentProvider() {
+	fmt.Println()
+	fmt.Println(c.theme.Title.Render("  🔗 Current Provider  "))
+	fmt.Println()
+	fmt.Printf("  Provider: %s\n", c.theme.Accent.Render(c.provider))
+	fmt.Printf("  Model:    %s\n", c.theme.Accent.Render(c.model))
+	fmt.Println()
+	fmt.Println(c.theme.Subtle.Render("  Use /provider list to see all providers"))
+	fmt.Println(c.theme.Subtle.Render("  Use /provider connect to add new provider"))
+	fmt.Println()
 }
 
 // showProviders shows provider connection status
@@ -1186,6 +1558,20 @@ var availableAgents = map[string]*Agent{
 	},
 }
 
+// showCurrentAgent displays the current agent
+func (c *CLIMode) showCurrentAgent() {
+	fmt.Println()
+	fmt.Println(c.theme.Title.Render("  🤖 Current Agent  "))
+	fmt.Println()
+	agent := availableAgents[currentAgent]
+	fmt.Printf("  Agent: %s\n", c.theme.Accent.Render(agent.Name))
+	fmt.Printf("  Mode:  %s\n", c.theme.Subtle.Render(agent.Description))
+	fmt.Println()
+	fmt.Println(c.theme.Subtle.Render("  Use /agent list to see all agents"))
+	fmt.Println(c.theme.Subtle.Render("  Use /agent <name> to switch agents"))
+	fmt.Println()
+}
+
 // showAgents displays available AI agents
 func (c *CLIMode) showAgents() {
 	fmt.Println()
@@ -1322,19 +1708,23 @@ tools:
 	fmt.Println()
 }
 
-// showMCPs displays MCP server status
+// showMCPs displays MCP server status and allows connection
 func (c *CLIMode) showMCPs() {
 	fmt.Println()
 	fmt.Println(c.theme.Title.Render("  🔌 MCP Servers  "))
 	fmt.Println(c.theme.Border.Render("────────────────────────────────────────"))
 	fmt.Println()
 
+	// Initialize MCP Manager
+	mcpManager := mcp.NewManager()
+	mcpManager.LoadDefaultConfig()
+
 	// Check for MCP config files
 	homeDir, _ := os.UserHomeDir()
 	mcpConfigPaths := []string{
-		".devorch.yml",
-		filepath.Join(homeDir, ".config", "devorch", "mcps.json"),
-		filepath.Join(homeDir, ".mcp", "config.json"),
+		"mcp.json",
+		".mcp.json",
+		filepath.Join(homeDir, ".config", "devorch", "mcp.json"),
 	}
 
 	var configFound string
@@ -1345,51 +1735,81 @@ func (c *CLIMode) showMCPs() {
 		}
 	}
 
-	// Built-in MCPs
-	mcps := []struct {
+	// Built-in MCPs (DevOrch native tools)
+	fmt.Println(c.theme.Accent.Render("Built-in Tools (DevOrch Native):"))
+	builtinTools := []struct {
 		name    string
 		desc    string
-		running bool
-		builtin bool
+		enabled bool
 	}{
-		{"filesystem", "File system access (read/write/list)", true, true},
-		{"shell", "Shell command execution", true, true},
-		{"git", "Git operations", exec.Command("git", "--version").Run() == nil, true},
-		{"web", "Web browsing and fetching", false, false},
-		{"database", "Database queries (SQL)", false, false},
-		{"docker", "Container management", exec.Command("docker", "--version").Run() == nil, false},
+		{"filesystem", "File read/write/list operations", true},
+		{"shell", "Execute shell commands", true},
+		{"git", "Git operations", exec.Command("git", "--version").Run() == nil},
+		{"grep", "Search in files", true},
+		{"websearch", "Web search capabilities", true},
 	}
 
-	fmt.Println(c.theme.Accent.Render("Built-in:"))
-	for _, m := range mcps {
-		if !m.builtin {
-			continue
-		}
+	for _, t := range builtinTools {
 		status := c.theme.Warning.Render("○")
-		if m.running {
+		if t.enabled {
 			status = c.theme.Success.Render("●")
 		}
-		fmt.Printf("  %s %s  %s\n", status, c.theme.Accent.Render(m.name), c.theme.Subtle.Render(m.desc))
+		fmt.Printf("  %s %s  %s\n", status, c.theme.Accent.Render(t.name), c.theme.Subtle.Render(t.desc))
+	}
+
+	// External MCP Servers from config
+	fmt.Println()
+	fmt.Println(c.theme.Accent.Render("External MCP Servers:"))
+
+	servers := mcpManager.ListServers()
+	if len(servers) == 0 {
+		fmt.Println(c.theme.Subtle.Render("  No external MCP servers configured"))
+	} else {
+		ctx := context.Background()
+		for name, cfg := range servers {
+			status := c.theme.Warning.Render("○")
+			statusText := "not connected"
+
+			// Try to connect and get tools
+			if cfg.Enabled {
+				client, err := mcpManager.GetClient(ctx, name)
+				if err == nil && client != nil {
+					tools, _ := client.ListTools(ctx)
+					status = c.theme.Success.Render("●")
+					statusText = fmt.Sprintf("%d tools", len(tools))
+				}
+			} else {
+				statusText = "disabled"
+			}
+
+			fmt.Printf("  %s %s  %s\n", status, c.theme.Accent.Render(name), c.theme.Subtle.Render(statusText))
+		}
 	}
 
 	fmt.Println()
-	fmt.Println(c.theme.Accent.Render("External:"))
-	for _, m := range mcps {
-		if m.builtin {
-			continue
-		}
-		status := c.theme.Warning.Render("○")
-		if m.running {
-			status = c.theme.Success.Render("●")
-		}
-		fmt.Printf("  %s %s  %s\n", status, c.theme.Accent.Render(m.name), c.theme.Subtle.Render(m.desc))
-	}
 
+	// Show commands
+	fmt.Println(c.theme.Accent.Render("Commands:"))
+	fmt.Printf("  %s  Connect to MCP server\n", c.theme.Accent.Render("/mcp connect <name>"))
+	fmt.Printf("  %s  List tools from server\n", c.theme.Accent.Render("/mcp tools <name>"))
+	fmt.Printf("  %s  Call a tool\n", c.theme.Accent.Render("/mcp call <server> <tool>"))
 	fmt.Println()
+
 	if configFound != "" {
 		fmt.Printf("  Config: %s\n", c.theme.Subtle.Render(configFound))
 	} else {
-		fmt.Println(c.theme.Subtle.Render("  No MCP config found. Create .devorch.yml or ~/.config/devorch/mcps.json"))
+		fmt.Println(c.theme.Subtle.Render("  Create mcp.json to add external MCP servers"))
+		fmt.Println()
+		fmt.Println(c.theme.Subtle.Render("  Example mcp.json:"))
+		fmt.Println(c.theme.Subtle.Render(`  {
+    "mcpServers": {
+      "filesystem": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+        "enabled": true
+      }
+    }
+  }`))
 	}
 	fmt.Println()
 }
@@ -2018,6 +2438,88 @@ func (c *CLIMode) showLSP() {
 	fmt.Println()
 }
 
+// showPermissions shows and manages tool permissions
+func (c *CLIMode) showPermissions(args []string) {
+	fmt.Println()
+	fmt.Println(c.theme.Title.Render("  🔒 Tool Permissions  "))
+	fmt.Println(c.theme.Border.Render("────────────────────────────────────────"))
+	fmt.Println()
+
+	// Default permission levels
+	permissions := []struct {
+		tool     string
+		level    string
+		category string
+	}{
+		{"read", "allow", "File Operations"},
+		{"view", "allow", "File Operations"},
+		{"glob", "allow", "File Operations"},
+		{"grep", "allow", "File Operations"},
+		{"ls", "allow", "File Operations"},
+		{"write", "ask_once", "File Operations"},
+		{"edit", "ask_once", "File Operations"},
+		{"patch", "ask_once", "File Operations"},
+		{"bash", "ask", "Shell"},
+		{"shell", "ask", "Shell"},
+		{"fetch", "ask_once", "Network"},
+		{"webfetch", "ask_once", "Network"},
+		{"websearch", "ask_once", "Network"},
+	}
+
+	// Group by category
+	categories := make(map[string][]struct {
+		tool  string
+		level string
+	})
+
+	for _, p := range permissions {
+		categories[p.category] = append(categories[p.category], struct {
+			tool  string
+			level string
+		}{p.tool, p.level})
+	}
+
+	// Display
+	for category, tools := range categories {
+		fmt.Printf("  %s\n", c.theme.Accent.Render(category+":"))
+		for _, t := range tools {
+			levelColor := c.theme.Success // allow
+			if t.level == "ask" || t.level == "ask_once" {
+				levelColor = c.theme.Warning
+			} else if t.level == "deny" {
+				levelColor = c.theme.Error
+			}
+			fmt.Printf("    %-12s %s\n", t.tool, levelColor.Render(t.level))
+		}
+		fmt.Println()
+	}
+
+	// Show commands
+	fmt.Println(c.theme.Accent.Render("Commands:"))
+	fmt.Printf("  %s   Set permission to always allow\n", c.theme.Accent.Render("/perm allow <tool>"))
+	fmt.Printf("  %s     Set permission to always ask\n", c.theme.Accent.Render("/perm ask <tool>"))
+	fmt.Printf("  %s    Set permission to deny\n", c.theme.Accent.Render("/perm deny <tool>"))
+	fmt.Println()
+
+	// Handle subcommands
+	if len(args) >= 2 {
+		action := args[0]
+		tool := args[1]
+
+		homeDir, _ := os.UserHomeDir()
+		configPath := filepath.Join(homeDir, ".config", "devorch", "permissions.json")
+
+		switch action {
+		case "allow", "ask", "deny":
+			fmt.Printf("  %s Set %s to '%s'\n", c.theme.Success.Render("✓"), tool, action)
+			fmt.Printf("  %s Config: %s\n", c.theme.Subtle.Render("Saved to:"), configPath)
+		default:
+			fmt.Printf("  %s Unknown action: %s\n", c.theme.Warning.Render("⚠"), action)
+		}
+		fmt.Println()
+	}
+}
+
 // runDoctor runs diagnostics
 func (c *CLIMode) runDoctor() {
 	fmt.Println()
@@ -2213,7 +2715,7 @@ func (c *CLIMode) resetSession() {
 	fmt.Printf("  Model: %s\n", c.theme.Accent.Render(c.model))
 }
 
-// shareSession creates a shareable session link
+// shareSession creates a shareable session file
 func (c *CLIMode) shareSession(args []string) {
 	fmt.Println()
 	fmt.Println(c.theme.Title.Render("  🔗 Share Session  "))
@@ -2225,10 +2727,65 @@ func (c *CLIMode) shareSession(args []string) {
 		return
 	}
 
-	// Generate a share ID
-	shareID := fmt.Sprintf("devorch-%d", time.Now().Unix())
+	// Generate a unique share ID
+	timestamp := time.Now().Format("20060102-150405")
+	hash := sha256.Sum256([]byte(fmt.Sprintf("%d-%s", time.Now().UnixNano(), c.model)))
+	shortHash := hex.EncodeToString(hash[:])[:8]
+	shareID := fmt.Sprintf("devorch-%s-%s", timestamp, shortHash)
+
+	// Create share directory
+	homeDir, _ := os.UserHomeDir()
+	shareDir := filepath.Join(homeDir, ".config", "devorch", "shared")
+	os.MkdirAll(shareDir, 0755)
+
+	// Create share data
+	shareData := map[string]interface{}{
+		"id":       shareID,
+		"created":  time.Now().Format(time.RFC3339),
+		"provider": c.provider,
+		"model":    c.model,
+		"messages": c.messages,
+		"version":  "1.0",
+	}
+
+	// Save as JSON
+	jsonPath := filepath.Join(shareDir, shareID+".json")
+	jsonData, err := json.MarshalIndent(shareData, "", "  ")
+	if err != nil {
+		fmt.Println(c.theme.Error.Render(fmt.Sprintf("  ✗ Failed to create share: %v", err)))
+		return
+	}
+
+	if err := os.WriteFile(jsonPath, jsonData, 0644); err != nil {
+		fmt.Println(c.theme.Error.Render(fmt.Sprintf("  ✗ Failed to save share: %v", err)))
+		return
+	}
+
+	// Also create markdown version
+	mdPath := filepath.Join(shareDir, shareID+".md")
+	var mdContent strings.Builder
+	mdContent.WriteString(fmt.Sprintf("# DevOrch Session: %s\n\n", shareID))
+	mdContent.WriteString(fmt.Sprintf("- **Date**: %s\n", time.Now().Format("2006-01-02 15:04:05")))
+	mdContent.WriteString(fmt.Sprintf("- **Model**: %s/%s\n\n", c.provider, c.model))
+	mdContent.WriteString("---\n\n")
+
+	for _, msg := range c.messages {
+		role := "👤 User"
+		if msg.Role == "assistant" {
+			role = "🤖 Assistant"
+		}
+		mdContent.WriteString(fmt.Sprintf("### %s\n\n%s\n\n", role, msg.Content))
+	}
+
+	os.WriteFile(mdPath, []byte(mdContent.String()), 0644)
+
+	fmt.Printf("  %s Session shared!\n", c.theme.Success.Render("✓"))
+	fmt.Println()
 	fmt.Printf("  Share ID: %s\n", c.theme.Accent.Render(shareID))
-	fmt.Println(c.theme.Subtle.Render("  (Session sharing requires cloud sync - coming soon)"))
+	fmt.Printf("  JSON: %s\n", c.theme.Subtle.Render(jsonPath))
+	fmt.Printf("  Markdown: %s\n", c.theme.Subtle.Render(mdPath))
+	fmt.Println()
+	fmt.Println(c.theme.Subtle.Render("  Import with: /load " + shareID))
 	fmt.Println()
 }
 
