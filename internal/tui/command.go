@@ -43,75 +43,78 @@ func (i commandItem) Description() string { return i.description }
 func (i commandItem) FilterValue() string { return i.name }
 
 // GetSlashCommands returns all available slash commands.
+// Synchronized with cli_mode.go handleCommand - 52 commands total
 func GetSlashCommands() []SlashCommand {
 	commands := []SlashCommand{
-		// Session commands (OpenCode 스타일)
-		{Name: "new", Description: "Start a new chat session", Category: "Session", Handler: cmdNew},
-		{Name: "sessions", Description: "List all saved sessions", Category: "Session", Handler: cmdSessions},
-		{Name: "clear", Description: "Clear current chat history", Category: "Session", Handler: cmdClear},
-		{Name: "reset", Description: "Reset session completely", Category: "Session", Handler: cmdReset},
+		// Session & History (8 commands)
+		{Name: "new", Description: "Start new session", Category: "Session", Handler: cmdNew},
+		{Name: "sessions", Description: "List/switch sessions", Category: "Session", Handler: cmdSessions},
 		{Name: "save", Description: "Save current session", Category: "Session", Handler: cmdSave},
-		{Name: "export", Description: "Export session as markdown", Category: "Session", Handler: cmdExport},
-		{Name: "share", Description: "Generate shareable session link", Category: "Session", Handler: cmdShare},
-		{Name: "unshare", Description: "Remove shared session link", Category: "Session", Handler: cmdUnshare},
-		{Name: "compact", Description: "Summarize and compact session", Category: "Session", Handler: cmdCompact},
-		{Name: "details", Description: "Show/hide message details (tokens, timing)", Category: "Session", Handler: cmdDetails},
+		{Name: "clear", Description: "Clear chat history", Category: "Session", Handler: cmdClear},
+		{Name: "export", Description: "Export session to file", Category: "Session", Handler: cmdExport},
+		{Name: "reset", Description: "Reset session completely", Category: "Session", Handler: cmdReset},
+		{Name: "share", Description: "Share session online", Category: "Session", Handler: cmdShare},
+		{Name: "unshare", Description: "Remove shared session", Category: "Session", Handler: cmdUnshare},
 
-		// Edit commands (OpenCode 스타일)
-		{Name: "undo", Description: "Undo last AI edit", Category: "Edit", Handler: cmdUndo},
-		{Name: "redo", Description: "Redo undone edit", Category: "Edit", Handler: cmdRedo},
-		{Name: "editor", Description: "Open external editor for input", Category: "Edit", Handler: cmdEditor},
+		// Edit & Code (7 commands)
+		{Name: "undo", Description: "Undo last change", Category: "Edit", Handler: cmdUndo},
+		{Name: "redo", Description: "Redo last undo", Category: "Edit", Handler: cmdRedo},
+		{Name: "compact", Description: "Compress session history", Category: "Edit", Handler: cmdCompact},
+		{Name: "copy", Description: "Copy to clipboard", Category: "Edit", Handler: cmdCopy},
+		{Name: "paste", Description: "Paste from clipboard", Category: "Edit", Handler: cmdPaste},
+		{Name: "details", Description: "Show last response details", Category: "Edit", Handler: cmdDetails},
+		{Name: "retry", Description: "Retry last message", Category: "Edit", Handler: cmdRetry},
 
-		// Project commands (OpenCode 스타일)
-		{Name: "init", Description: "Analyze project and create AGENTS.md", Category: "Project", Handler: cmdInit},
-		{Name: "files", Description: "Show project files context", Category: "Project", Handler: cmdFiles},
-		{Name: "grep", Description: "Search code in project", Category: "Project", Handler: cmdGrep},
-		{Name: "ls", Description: "List directory structure", Category: "Project", Handler: cmdLs},
-		{Name: "diff", Description: "Show changed files diff", Category: "Project", Handler: cmdDiff},
-		{Name: "git", Description: "Show git status", Category: "Project", Handler: cmdGitStatus},
+		// Project & Files (7 commands)
+		{Name: "files", Description: "List project files", Category: "Project", Handler: cmdFiles},
+		{Name: "grep", Description: "Search in files", Category: "Project", Handler: cmdGrep},
+		{Name: "diff", Description: "Show file differences", Category: "Project", Handler: cmdDiff},
+		{Name: "git", Description: "Git commands", Category: "Project", Handler: cmdGit},
+		{Name: "review", Description: "Review code changes", Category: "Project", Handler: cmdReview},
+		{Name: "editor", Description: "Open in editor", Category: "Project", Handler: cmdEditor},
+		{Name: "init", Description: "Initialize project", Category: "Project", Handler: cmdInit},
 
-		// Model commands
-		{Name: "model", Description: "Show/change current AI model", Category: "Model", Handler: cmdModel},
+		// Model & Provider (5 commands)
 		{Name: "models", Description: "List available models", Category: "Model", Handler: cmdModels},
-		{Name: "provider", Description: "Show/change AI provider", Category: "Model", Handler: cmdProvider},
-		{Name: "providers", Description: "List available providers", Category: "Model", Handler: cmdProviders},
-		{Name: "agent", Description: "Switch AI agent mode", Category: "Model", Handler: cmdAgent},
-		{Name: "thinking", Description: "Toggle extended thinking mode", Category: "Model", Handler: cmdThinking},
+		{Name: "model", Description: "Switch current model", Category: "Model", Handler: cmdModel},
+		{Name: "providers", Description: "List all providers", Category: "Model", Handler: cmdProviders},
+		{Name: "connect", Description: "Connect to provider", Category: "Model", Handler: cmdConnect},
+		{Name: "agent", Description: "Switch agent mode", Category: "Model", Handler: cmdAgent},
 
-		// Context commands (OpenCode 스타일)
-		{Name: "context", Description: "Show current context window usage", Category: "Context", Handler: cmdContext},
-		{Name: "memory", Description: "Show/manage persistent memory", Category: "Context", Handler: cmdMemory},
-		{Name: "add", Description: "Add file to context", Category: "Context", Handler: cmdAdd},
-
-		// Settings commands
-		{Name: "settings", Description: "Open settings menu", Category: "Settings", Handler: cmdSettings},
-		{Name: "theme", Description: "Change color theme", Category: "Settings", Handler: cmdTheme},
-		{Name: "themes", Description: "List available themes", Category: "Settings", Handler: cmdThemes},
-		{Name: "language", Description: "Change interface language", Category: "Settings", Handler: cmdLanguage},
-		{Name: "config", Description: "Edit configuration file", Category: "Settings", Handler: cmdConfig},
-
-		// Auth commands
-		{Name: "login", Description: "Login to AI provider", Category: "Auth", Handler: cmdLogin},
-		{Name: "logout", Description: "Logout from provider", Category: "Auth", Handler: cmdLogout},
-		{Name: "auth", Description: "Show authentication status", Category: "Auth", Handler: cmdAuth},
-		{Name: "connect", Description: "Connect to remote DevOrch server", Category: "Auth", Handler: cmdConnect},
-
-		// Tools commands
+		// Tools & MCP (4 commands)
+		{Name: "mcps", Description: "Manage MCP servers", Category: "Tools", Handler: cmdMCP},
 		{Name: "tools", Description: "List available tools", Category: "Tools", Handler: cmdTools},
-		{Name: "mcp", Description: "Manage MCP servers", Category: "Tools", Handler: cmdMCP},
-		{Name: "lsp", Description: "Language Server Protocol status", Category: "Tools", Handler: cmdLSP},
+		{Name: "lsp", Description: "LSP status", Category: "Tools", Handler: cmdLSP},
+		{Name: "agents", Description: "Show all agents", Category: "Tools", Handler: cmdAgents},
 
-		// System commands
+		// Context & Memory (4 commands)
+		{Name: "context", Description: "Show current context", Category: "Context", Handler: cmdContext},
+		{Name: "memory", Description: "Show conversation memory", Category: "Context", Handler: cmdMemory},
+		{Name: "add", Description: "Add file to context", Category: "Context", Handler: cmdAdd},
+		{Name: "thinking", Description: "Toggle thinking mode", Category: "Context", Handler: cmdThinking},
+
+		// Auth & Config (8 commands)
+		{Name: "login", Description: "Login to provider", Category: "Auth", Handler: cmdLogin},
+		{Name: "logout", Description: "Logout from provider", Category: "Auth", Handler: cmdLogout},
+		{Name: "auth", Description: "Show auth status", Category: "Auth", Handler: cmdAuth},
+		{Name: "settings", Description: "Show settings", Category: "Auth", Handler: cmdSettings},
+		{Name: "config", Description: "Edit configuration", Category: "Auth", Handler: cmdConfig},
+		{Name: "language", Description: "Set language (en/ko/ja)", Category: "Auth", Handler: cmdLanguage},
+		{Name: "themes", Description: "List themes", Category: "Auth", Handler: cmdTheme},
+		{Name: "theme", Description: "Switch theme", Category: "Auth", Handler: cmdThemeSwitch},
+
+		// System (6 commands)
 		{Name: "status", Description: "Show system status", Category: "System", Handler: cmdStatus},
-		{Name: "setup", Description: "Run auto setup wizard", Category: "System", Handler: cmdSetup},
-		{Name: "doctor", Description: "Run diagnostics check", Category: "System", Handler: cmdDoctor},
-		{Name: "version", Description: "Show version info", Category: "System", Handler: cmdVersion},
-		{Name: "install", Description: "Install recommended models", Category: "System", Handler: cmdInstall},
-		{Name: "bench", Description: "Run performance benchmark", Category: "System", Handler: cmdBench},
+		{Name: "setup", Description: "Run initial setup", Category: "System", Handler: cmdSetup},
+		{Name: "doctor", Description: "Run diagnostics", Category: "System", Handler: cmdDoctor},
+		{Name: "version", Description: "Show version", Category: "System", Handler: cmdVersion},
+		{Name: "install", Description: "Install model", Category: "System", Handler: cmdInstall},
+		{Name: "bench", Description: "Run benchmark", Category: "System", Handler: cmdBench},
 
-		// Help
-		{Name: "help", Description: "Show help information", Category: "Help", Handler: cmdHelp},
-		{Name: "quit", Description: "Exit application", Category: "Help", Handler: cmdQuit},
+		// Help (3 commands)
+		{Name: "help", Description: "Show help", Category: "Help", Handler: cmdHelp},
+		{Name: "exit", Description: "Exit DevOrch", Category: "Help", Handler: cmdQuit},
+		{Name: "quit", Description: "Exit DevOrch (alias)", Category: "Help", Handler: cmdQuit},
 	}
 
 	// Load custom commands (OpenCode 스타일)
@@ -601,31 +604,23 @@ func cmdTheme(m *Model) tea.Cmd {
 }
 
 func cmdThemes(m *Model) tea.Cmd {
-	themes := AvailableThemes()
-	var sb strings.Builder
-	sb.WriteString("Available themes:\n")
-	for i, t := range themes {
-		if i%5 == 0 && i > 0 {
-			sb.WriteString("\n")
-		}
-		sb.WriteString(fmt.Sprintf("• %s  ", t))
-	}
-	m.messages = append(m.messages, Message{
-		Role:    "system",
-		Content: sb.String(),
-	})
-	return nil
+	// Show theme selection UI instead of text list
+	return cmdTheme(m)
 }
 
 func cmdLanguage(m *Model) tea.Cmd {
-	m.messages = append(m.messages, Message{
-		Role: "system",
-		Content: `Available languages:
-• en - English
-• ko - 한국어
-• ja - 日本語
-• zh - 中文`,
-	})
+	m.selectionList = []string{
+		"English (en)",
+		"한국어 (ko)",
+		"日本語 (ja)",
+		"中文 (zh)",
+		"Español (es)",
+		"Français (fr)",
+		"Deutsch (de)",
+	}
+	m.selectionIdx = 0
+	m.selectionTitle = "Select Language"
+	m.mode = ViewModeLanguageSelect
 	return nil
 }
 
@@ -1238,6 +1233,10 @@ func checkOllamaRunning() bool {
 
 func cmdSetup(m *Model) tea.Cmd {
 	m.mode = ViewModeSetup
+	m.messages = append(m.messages, Message{
+		Role:    "system",
+		Content: "🚀 Auto Setup Wizard\n\nAnalyzing your system...\n\nThis will:\n1. Check Ollama installation\n2. Detect system resources\n3. Recommend optimal models\n4. Install lightweight models\n\nPress Enter to continue, or Esc to cancel.",
+	})
 	return nil
 }
 
@@ -1398,57 +1397,415 @@ List the main files and directories, then provide the AGENTS.md content.`, cwd)
 	return m.sendToLLM(prompt)
 }
 
-// cmdInstall installs recommended models
+// InstallableModel represents a model available for installation
+type InstallableModel struct {
+	ID          string
+	Name        string
+	Size        string
+	Description string
+	Recommended bool
+	Installed   bool
+	Category    string // "Recommended", "Coding", "General", "Small", "Large"
+}
+
+// cmdInstall shows interactive model installation UI
 func cmdInstall(m *Model) tea.Cmd {
+	// 시스템 사양 감지
+	specs := detectSystemSpecs()
+	m.installSystemSpecs = specs
+
+	// 이미 설치된 모델 확인
+	installed := getOllamaModels()
+	installedSet := make(map[string]bool)
+	for _, model := range installed {
+		if model.IsInstalled {
+			installedSet[model.ID] = true
+		}
+	}
+
+	// 모든 설치 가능한 모델 생성
+	m.installableModels = buildInstallableModels(specs, installedSet)
+	m.selectedModelIdxs = make(map[int]bool)
+
+	// 추천 모델은 자동 선택
+	for i, model := range m.installableModels {
+		if model.Recommended && !model.Installed {
+			m.selectedModelIdxs[i] = true
+		}
+	}
+
+	// 선택 UI로 전환
+	m.mode = ViewModeInstallSelect
+	m.selectionIdx = 0
+	m.selectionTitle = "Select Models to Install"
+
+	return nil
+}
+
+// buildInstallableModels creates the list of all installable models
+func buildInstallableModels(specs SystemSpecs, installedSet map[string]bool) []InstallableModel {
+	var models []InstallableModel
+
+	// 추천 모델
+	recommended := recommendModelsDetailed(specs)
+	for _, model := range recommended {
+		models = append(models, InstallableModel{
+			ID:          model.id,
+			Name:        model.id,
+			Size:        model.size,
+			Description: model.desc,
+			Recommended: true,
+			Installed:   installedSet[model.id],
+			Category:    "⭐ Recommended",
+		})
+	}
+
+	// 코딩 특화 모델
+	codingModels := []struct {
+		id   string
+		size string
+		desc string
+	}{
+		{"qwen2.5-coder:3b", "2GB", "Qwen2.5 Coder 3B"},
+		{"codellama:7b", "3.8GB", "CodeLlama 7B"},
+		{"codellama:13b", "7.3GB", "CodeLlama 13B"},
+		{"deepseek-coder:6.7b", "3.8GB", "DeepSeek Coder"},
+	}
+	for _, model := range codingModels {
+		models = append(models, InstallableModel{
+			ID:          model.id,
+			Name:        model.id,
+			Size:        model.size,
+			Description: model.desc,
+			Recommended: false,
+			Installed:   installedSet[model.id],
+			Category:    "💻 Coding",
+		})
+	}
+
+	// 범용 모델
+	generalModels := []struct {
+		id   string
+		size string
+		desc string
+	}{
+		{"llama3.2:1b", "1.3GB", "Meta Llama 3.2 1B"},
+		{"llama3.2:3b", "2GB", "Meta Llama 3.2 3B"},
+		{"llama3.1:8b", "4.7GB", "Meta Llama 3.1 8B"},
+		{"mistral:7b", "4.1GB", "Mistral 7B"},
+		{"gemma2:2b", "1.6GB", "Google Gemma2 2B"},
+		{"qwen2.5:3b", "2GB", "Qwen2.5 3B"},
+		{"qwen2.5:7b", "4.7GB", "Qwen2.5 7B"},
+	}
+	for _, model := range generalModels {
+		models = append(models, InstallableModel{
+			ID:          model.id,
+			Name:        model.id,
+			Size:        model.size,
+			Description: model.desc,
+			Recommended: false,
+			Installed:   installedSet[model.id],
+			Category:    "🌐 General",
+		})
+	}
+
+	// 소형 모델
+	smallModels := []struct {
+		id   string
+		size string
+		desc string
+	}{
+		{"phi3:mini", "1.3GB", "Microsoft Phi-3 Mini"},
+		{"deepseek-r1:1.5b", "1GB", "DeepSeek R1 1.5B"},
+		{"tinyllama:1.1b", "637MB", "TinyLlama 1.1B"},
+	}
+	for _, model := range smallModels {
+		models = append(models, InstallableModel{
+			ID:          model.id,
+			Name:        model.id,
+			Size:        model.size,
+			Description: model.desc,
+			Recommended: false,
+			Installed:   installedSet[model.id],
+			Category:    "🔰 Small",
+		})
+	}
+
+	// 대형 모델 (고성능 시스템용)
+	if specs.RAM >= 16 {
+		largeModels := []struct {
+			id   string
+			size string
+			desc string
+		}{
+			{"mixtral:8x7b", "26GB", "Mixtral 8x7B MoE"},
+			{"qwen2.5:14b", "9GB", "Qwen2.5 14B"},
+			{"llama3.1:70b", "40GB", "Meta Llama 3.1 70B"},
+		}
+		for _, model := range largeModels {
+			models = append(models, InstallableModel{
+				ID:          model.id,
+				Name:        model.id,
+				Size:        model.size,
+				Description: model.desc,
+				Recommended: false,
+				Installed:   installedSet[model.id],
+				Category:    "🚀 Large",
+			})
+		}
+	}
+
+	return models
+}
+
+// recommendModelsDetailed returns detailed recommended models
+func recommendModelsDetailed(specs SystemSpecs) []struct {
+	id   string
+	size string
+	desc string
+} {
+	if specs.RAM < 8 {
+		return []struct {
+			id   string
+			size string
+			desc string
+		}{
+			{"phi3:mini", "1.3GB", "Best for low-end (Microsoft)"},
+			{"qwen2.5:3b", "2GB", "Fast general purpose"},
+			{"llama3.2:1b", "1.3GB", "Tiny but capable (Meta)"},
+		}
+	} else if specs.RAM < 16 {
+		return []struct {
+			id   string
+			size string
+			desc string
+		}{
+			{"qwen2.5:3b", "2GB", "Fast general purpose"},
+			{"qwen2.5-coder:3b", "2GB", "Specialized for coding"},
+			{"mistral:7b", "4.1GB", "Balanced performance"},
+		}
+	} else if specs.RAM < 32 {
+		return []struct {
+			id   string
+			size string
+			desc string
+		}{
+			{"mistral:7b", "4.1GB", "Excellent balance"},
+			{"llama3.2:3b", "2GB", "Latest Meta model"},
+			{"codellama:7b", "3.8GB", "Best for coding"},
+		}
+	} else {
+		return []struct {
+			id   string
+			size string
+			desc string
+		}{
+			{"llama3.1:8b", "4.7GB", "Latest Llama"},
+			{"mixtral:8x7b", "26GB", "Mixture of Experts"},
+			{"qwen2.5:14b", "9GB", "Top performance"},
+		}
+	}
+}
+
+// cmdInstallOld is the old implementation (kept for backup)
+func cmdInstallOld(m *Model) tea.Cmd {
+	// 시스템 사양 감지
+	specs := detectSystemSpecs()
+
+	// 사양에 맞는 모델 추천
+	recommended := recommendModels(specs)
+
+	// 이미 설치된 모델 확인
+	installed := getOllamaModels()
+	installedSet := make(map[string]bool)
+	for _, model := range installed {
+		if model.IsInstalled {
+			installedSet[model.ID] = true
+		}
+	}
+
+	// 메시지 생성
+	var msg strings.Builder
+	msg.WriteString("📦 Model Installation Assistant\n\n")
+
+	// 시스템 사양 표시
+	msg.WriteString("🖥️  System Specs:\n")
+	msg.WriteString(fmt.Sprintf("  • RAM: %.1f GB\n", specs.RAM))
+	msg.WriteString(fmt.Sprintf("  • CPU: %d cores\n", specs.CPUCores))
+	msg.WriteString(fmt.Sprintf("  • Recommendation: %s\n\n", specs.Tier))
+
+	// 이미 설치된 모델
+	if len(installedSet) > 0 {
+		msg.WriteString("✅ Already Installed:\n")
+		for id := range installedSet {
+			msg.WriteString(fmt.Sprintf("  ✓ %s\n", id))
+		}
+		msg.WriteString("\n")
+	}
+
+	// 추천 모델 목록
+	msg.WriteString("🎯 Recommended Models for Your System:\n\n")
+
+	var toInstall []string
+	for _, model := range recommended {
+		status := "📥"
+		if installedSet[model.id] {
+			status = "✅"
+		} else {
+			toInstall = append(toInstall, model.id)
+		}
+		msg.WriteString(fmt.Sprintf("  %s %s\n", status, model.desc))
+	}
+
+	// 추가 모델 옵션
+	msg.WriteString("\n📋 Other Popular Models:\n")
+	otherModels := []struct {
+		id   string
+		size string
+		desc string
+	}{
+		{"llama3.2:1b", "1.3GB", "Meta's smallest Llama"},
+		{"gemma2:2b", "1.6GB", "Google's efficient model"},
+		{"deepseek-r1:1.5b", "1GB", "Reasoning model"},
+		{"mistral:7b", "4.1GB", "Balanced performance"},
+		{"llama3.2:3b", "2GB", "Meta Llama 3.2"},
+		{"codellama:7b", "3.8GB", "Specialized coding"},
+	}
+
+	for _, model := range otherModels {
+		status := "📥"
+		if installedSet[model.id] {
+			status = "✅"
+		}
+		msg.WriteString(fmt.Sprintf("  %s %s (%s) - %s\n", status, model.id, model.size, model.desc))
+	}
+
+	msg.WriteString("\n💡 Commands:\n")
+	msg.WriteString("  • Install recommended: Already installing below...\n")
+	msg.WriteString("  • Install specific: ollama pull <model-name>\n")
+	msg.WriteString("  • List all models: ollama list\n")
+	msg.WriteString("  • Check progress: ollama ps\n")
+
+	// 백그라운드 설치 시작
+	if len(toInstall) > 0 {
+		msg.WriteString(fmt.Sprintf("\n⬇️  Installing %d models in background...\n", len(toInstall)))
+		for _, id := range toInstall {
+			msg.WriteString(fmt.Sprintf("  • %s\n", id))
+			go func(modelID string) {
+				exec.Command("ollama", "pull", modelID).Run()
+			}(id)
+		}
+		msg.WriteString("\n⏱️  This may take 5-10 minutes depending on your connection.")
+	} else {
+		msg.WriteString("\n✅ All recommended models are already installed!")
+	}
+
 	m.messages = append(m.messages, Message{
 		Role:    "system",
-		Content: "📦 Installing recommended models...\n\nThis will install lightweight, high-performance models.\nPlease wait...",
+		Content: msg.String(),
 	})
 
-	return func() tea.Msg {
-		// 설치 진행 메시지 수집
-		var results []string
+	return nil
+}
 
-		// 필수 모델 목록 (저사양 고성능)
-		models := []struct {
+// SystemSpecs holds system specifications
+type SystemSpecs struct {
+	RAM      float64 // GB
+	CPUCores int
+	Tier     string // "Low", "Medium", "High"
+}
+
+// detectSystemSpecs detects current system specifications
+func detectSystemSpecs() SystemSpecs {
+	specs := SystemSpecs{
+		RAM:      8.0, // Default
+		CPUCores: 4,   // Default
+		Tier:     "Medium",
+	}
+
+	// Detect RAM
+	if runtime.GOOS == "darwin" {
+		// macOS
+		out, err := exec.Command("sysctl", "-n", "hw.memsize").Output()
+		if err == nil {
+			var bytes int64
+			fmt.Sscanf(string(out), "%d", &bytes)
+			specs.RAM = float64(bytes) / (1024 * 1024 * 1024)
+		}
+	} else if runtime.GOOS == "linux" {
+		// Linux
+		out, err := exec.Command("grep", "MemTotal", "/proc/meminfo").Output()
+		if err == nil {
+			var kb int64
+			fmt.Sscanf(string(out), "MemTotal: %d kB", &kb)
+			specs.RAM = float64(kb) / (1024 * 1024)
+		}
+	}
+
+	// Detect CPU cores
+	specs.CPUCores = runtime.NumCPU()
+
+	// Determine tier
+	if specs.RAM < 8 {
+		specs.Tier = "Low (Recommend 1-3B models)"
+	} else if specs.RAM < 16 {
+		specs.Tier = "Medium (Can run up to 7B models)"
+	} else if specs.RAM < 32 {
+		specs.Tier = "High (Can run up to 13B models)"
+	} else {
+		specs.Tier = "Very High (Can run 30B+ models)"
+	}
+
+	return specs
+}
+
+// recommendModels recommends models based on system specs
+func recommendModels(specs SystemSpecs) []struct {
+	id   string
+	desc string
+} {
+	if specs.RAM < 8 {
+		// Low-end systems: 1-3B models
+		return []struct {
 			id   string
 			desc string
 		}{
-			{"phi3:mini", "🥈 저사양 최강 (1.3GB)"},
-			{"qwen2.5:3b", "빠른 범용 (2GB)"},
-			{"qwen2.5-coder:3b", "코딩용 (2GB)"},
+			{"phi3:mini", "1.3GB - 🥈 Best for low-end (Microsoft)"},
+			{"qwen2.5:3b", "2GB - Fast general purpose (Alibaba)"},
+			{"llama3.2:1b", "1.3GB - Tiny but capable (Meta)"},
 		}
-
-		client := NewOllamaClient()
-
-		// 이미 설치된 모델 확인
-		installed := getOllamaModels()
-		installedSet := make(map[string]bool)
-		for _, m := range installed {
-			if m.IsInstalled {
-				installedSet[m.ID] = true
-			}
+	} else if specs.RAM < 16 {
+		// Mid-range systems: 3-7B models
+		return []struct {
+			id   string
+			desc string
+		}{
+			{"qwen2.5:3b", "2GB - Fast general purpose"},
+			{"qwen2.5-coder:3b", "2GB - Specialized for coding"},
+			{"mistral:7b", "4.1GB - Balanced performance"},
+			{"phi3:mini", "1.3GB - Efficient fallback"},
 		}
-
-		for _, model := range models {
-			if installedSet[model.id] {
-				results = append(results, fmt.Sprintf("✓ %s - %s (already installed)", model.id, model.desc))
-				continue
-			}
-
-			// 실제 설치 시도
-			err := exec.Command("ollama", "pull", model.id).Run()
-			if err != nil {
-				// 백그라운드 설치 시작
-				go client.PullModel(nil, model.id)
-				results = append(results, fmt.Sprintf("⬇ %s - %s (downloading in background)", model.id, model.desc))
-			} else {
-				results = append(results, fmt.Sprintf("✓ %s - %s (installed)", model.id, model.desc))
-			}
+	} else if specs.RAM < 32 {
+		// High-end systems: 7-13B models
+		return []struct {
+			id   string
+			desc string
+		}{
+			{"mistral:7b", "4.1GB - Excellent balance"},
+			{"llama3.2:3b", "2GB - Latest Meta model"},
+			{"codellama:7b", "3.8GB - Best for coding"},
+			{"qwen2.5:7b", "4.7GB - Advanced reasoning"},
 		}
-
-		return StreamChunkMsg{
-			Content: "📦 Model installation status:\n\n" + strings.Join(results, "\n") + "\n\n💡 Run 'ollama list' to check progress.",
+	} else {
+		// Very high-end: 13B+ models
+		return []struct {
+			id   string
+			desc string
+		}{
+			{"llama3.1:8b", "4.7GB - Latest Llama"},
+			{"mixtral:8x7b", "26GB - Mixture of Experts"},
+			{"codellama:13b", "7.3GB - Advanced coding"},
+			{"qwen2.5:14b", "9GB - Top performance"},
 		}
 	}
 }
@@ -1546,27 +1903,15 @@ func cmdThinking(m *Model) tea.Cmd {
 	return nil
 }
 
-// cmdConnect connects to a remote DevOrch server
+// cmdConnect opens the OpenCode-style provider connect UI
 func cmdConnect(m *Model) tea.Cmd {
-	m.messages = append(m.messages, Message{
-		Role: "system",
-		Content: `🔗 Remote Server Connection
-
-Enter the server URL to connect:
-
-Examples:
-  • localhost:3000
-  • devorch.example.com
-  • 192.168.1.100:8080
-
-Usage:
-  1. Start server: devorch serve
-  2. Connect client: /connect <url>
-
-Note: Set DEVORCH_SERVER_PASSWORD for authentication.
-
-Currently: Not connected (local mode)`,
-	})
+	// Initialize connect providers
+	m.connectProviders = GetConnectProviders()
+	m.connectFilteredList = m.connectProviders
+	m.connectSelectedIdx = 0
+	m.connectFilter = ""
+	m.connectInputMode = false
+	m.mode = ViewModeConnect
 	return nil
 }
 
@@ -1614,4 +1959,240 @@ func QuickCommandList(theme Theme) string {
 		Padding(0, 1)
 
 	return style.Render("Type / for commands • Ctrl+N: New • Ctrl+S: Sessions • Ctrl+H: Help")
+}
+
+// ===================== Additional Command Handlers =====================
+
+// cmdCopy copies last response to clipboard
+func cmdCopy(m *Model) tea.Cmd {
+	if len(m.messages) == 0 {
+		m.messages = append(m.messages, Message{
+			Role:    "system",
+			Content: "📋 No messages to copy",
+		})
+		return nil
+	}
+
+	// Find last assistant message
+	var lastContent string
+	for i := len(m.messages) - 1; i >= 0; i-- {
+		if m.messages[i].Role == "assistant" {
+			lastContent = m.messages[i].Content
+			break
+		}
+	}
+
+	if lastContent == "" {
+		m.messages = append(m.messages, Message{
+			Role:    "system",
+			Content: "📋 No response to copy",
+		})
+		return nil
+	}
+
+	// Use pbcopy on macOS, xclip on Linux
+	var cmd *exec.Cmd
+	if runtime.GOOS == "darwin" {
+		cmd = exec.Command("pbcopy")
+	} else {
+		cmd = exec.Command("xclip", "-selection", "clipboard")
+	}
+	cmd.Stdin = strings.NewReader(lastContent)
+	if err := cmd.Run(); err != nil {
+		m.messages = append(m.messages, Message{
+			Role:    "system",
+			Content: fmt.Sprintf("❌ Failed to copy: %v", err),
+		})
+		return nil
+	}
+
+	m.messages = append(m.messages, Message{
+		Role:    "system",
+		Content: fmt.Sprintf("📋 Copied %d characters to clipboard", len(lastContent)),
+	})
+	return nil
+}
+
+// cmdPaste pastes from clipboard as user message
+func cmdPaste(m *Model) tea.Cmd {
+	var cmd *exec.Cmd
+	if runtime.GOOS == "darwin" {
+		cmd = exec.Command("pbpaste")
+	} else {
+		cmd = exec.Command("xclip", "-selection", "clipboard", "-o")
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		m.messages = append(m.messages, Message{
+			Role:    "system",
+			Content: fmt.Sprintf("❌ Failed to paste: %v", err),
+		})
+		return nil
+	}
+
+	content := strings.TrimSpace(string(output))
+	if content == "" {
+		m.messages = append(m.messages, Message{
+			Role:    "system",
+			Content: "📋 Clipboard is empty",
+		})
+		return nil
+	}
+
+	// Add to input
+	m.input.SetValue(content)
+	m.messages = append(m.messages, Message{
+		Role:    "system",
+		Content: fmt.Sprintf("📋 Pasted %d characters. Press Enter to send.", len(content)),
+	})
+	return nil
+}
+
+// cmdRetry retries the last user message
+func cmdRetry(m *Model) tea.Cmd {
+	// Find last user message
+	var lastUserMsg string
+	var lastUserIdx int = -1
+	for i := len(m.messages) - 1; i >= 0; i-- {
+		if m.messages[i].Role == "user" {
+			lastUserMsg = m.messages[i].Content
+			lastUserIdx = i
+			break
+		}
+	}
+
+	if lastUserIdx == -1 {
+		m.messages = append(m.messages, Message{
+			Role:    "system",
+			Content: "⚠️ No previous message to retry",
+		})
+		return nil
+	}
+
+	// Remove messages from lastUserIdx onwards
+	m.messages = m.messages[:lastUserIdx]
+
+	// Add the user message back and mark for retry
+	m.messages = append(m.messages, Message{
+		Role:    "user",
+		Content: lastUserMsg,
+	})
+
+	m.messages = append(m.messages, Message{
+		Role:    "system",
+		Content: "🔄 Retrying: " + lastUserMsg[:min(50, len(lastUserMsg))] + "...",
+	})
+
+	// User needs to press Enter to re-send
+	m.input.SetValue(lastUserMsg)
+	return nil
+}
+
+// cmdGit executes git commands
+func cmdGit(m *Model) tea.Cmd {
+	// Show git status by default
+	cmd := exec.Command("git", "status", "--short")
+	output, err := cmd.Output()
+	if err != nil {
+		m.messages = append(m.messages, Message{
+			Role:    "system",
+			Content: fmt.Sprintf("❌ Git error: %v", err),
+		})
+		return nil
+	}
+
+	status := strings.TrimSpace(string(output))
+	if status == "" {
+		status = "Working tree clean"
+	}
+
+	// Get branch
+	branchCmd := exec.Command("git", "branch", "--show-current")
+	branchOutput, _ := branchCmd.Output()
+	branch := strings.TrimSpace(string(branchOutput))
+
+	result := fmt.Sprintf("🌿 Branch: %s\n\n📄 Status:\n%s", branch, status)
+	m.messages = append(m.messages, Message{
+		Role:    "system",
+		Content: result,
+	})
+	return nil
+}
+
+// cmdReview reviews code changes with AI
+func cmdReview(m *Model) tea.Cmd {
+	// Get staged diff first
+	cmd := exec.Command("git", "diff", "--staged")
+	output, err := cmd.Output()
+	diffContent := string(output)
+
+	// If no staged changes, get unstaged diff
+	if err != nil || strings.TrimSpace(diffContent) == "" {
+		cmd = exec.Command("git", "diff")
+		output, err = cmd.Output()
+		diffContent = string(output)
+	}
+
+	if err != nil || strings.TrimSpace(diffContent) == "" {
+		m.messages = append(m.messages, Message{
+			Role:    "system",
+			Content: "⚠️ No changes to review. Stage or modify files first.",
+		})
+		return nil
+	}
+
+	// Truncate if too long
+	if len(diffContent) > 8000 {
+		diffContent = diffContent[:8000] + "\n... (truncated)"
+	}
+
+	// Add context for AI review - user needs to press Enter
+	reviewPrompt := fmt.Sprintf("Please review these code changes:\n\n```diff\n%s\n```\n\nFocus on: code quality, bugs, performance, security", diffContent)
+	m.input.SetValue(reviewPrompt)
+
+	m.messages = append(m.messages, Message{
+		Role:    "system",
+		Content: "📝 Code diff loaded. Press Enter to send for AI review.",
+	})
+
+	return nil
+}
+
+// cmdAgents shows available agents
+func cmdAgents(m *Model) tea.Cmd {
+	agents := []struct {
+		name string
+		desc string
+	}{
+		{"coder", "Expert programmer for writing code"},
+		{"reviewer", "Code reviewer for quality checks"},
+		{"debugger", "Debugging specialist"},
+		{"architect", "System design expert"},
+		{"tester", "QA and testing expert"},
+	}
+
+	var sb strings.Builder
+	sb.WriteString("🤖 Available Agents\n\n")
+	for i, a := range agents {
+		marker := "  "
+		if i == 0 { // Default to coder
+			marker = "▸ "
+		}
+		sb.WriteString(fmt.Sprintf("%s%s - %s\n", marker, a.name, a.desc))
+	}
+	sb.WriteString("\nUse /agent <name> to switch")
+
+	m.messages = append(m.messages, Message{
+		Role:    "system",
+		Content: sb.String(),
+	})
+	return nil
+}
+
+// cmdThemeSwitch switches to a specific theme
+func cmdThemeSwitch(m *Model) tea.Cmd {
+	// This is handled by cmdTheme with argument
+	m.mode = ViewModeThemeSelect
+	return nil
 }

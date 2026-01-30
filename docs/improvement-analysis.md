@@ -460,3 +460,44 @@ OpenCode/oh-my-opencode와 비교하여 다음 영역에서 개선이 필요합�
 
 Go 언어의 장점(컴파일 속도, 단일 바이너리, 크로스 플랫폼)을 유지하면서,  
 TypeScript 기반 OpenCode의 기능을 점진적으로 구현하는 것을 권장합니다.
+
+---
+
+## 6. 명령어 효율화 통합
+
+> **상세 문서**: [command-integration-plan.md](./command-integration-plan.md)
+
+### 6.1 현재 상태
+
+| 항목 | 상태 |
+|------|------|
+| handleCommand() 구현 | 44개 명령어 |
+| printHelp() 노출 | 16개 명령어 |
+| 핸들러 함수 | 59개 |
+| 사용자 인지 | 노출된 16개만 인지 가능 |
+
+### 6.2 해결 방안: 16개 핵심 그룹 통합
+
+```
+/session  → new, list, save, export, reset, compact, share
+/model    → list, set, install, bench
+/provider → list, set, connect, disconnect  
+/agent    → list, set
+/code     → files, ls, grep, diff, review, git
+/context  → add, memory, thinking
+/tools    → mcp, lsp
+/config   → theme, lang, edit
+/auth     → login, logout
+/system   → status, setup, doctor, version
+```
+
+**단축 명령어 유지**: `/help`, `/exit`, `/clear`, `/new`, `/history`, `/init`
+
+### 6.3 기대 효과
+
+| 항목 | 현재 | 통합 후 | 개선 |
+|------|------|---------|------|
+| 최상위 명령어 | 44개 | 16개 | **-64%** |
+| /help 출력 | 52줄 | 25줄 | **-52%** |
+| 학습 곡선 | 높음 | 낮음 | 향상 |
+| 명령어 일관성 | 불규칙 | 체계적 | 향상 |

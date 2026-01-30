@@ -2,8 +2,10 @@
 package tui
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"devorch/internal/auth"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +16,117 @@ import (
 	"strings"
 	"time"
 )
+
+// ConnectProvider represents a provider for the /connect UI (OpenCode style)
+type ConnectProvider struct {
+	ID          string
+	Name        string
+	Category    string // "Popular" or "Other"
+	AuthType    string // "oauth", "api_key", "none"
+	EnvVar      string // Environment variable for API key
+	IsConnected bool
+	AuthURL     string // URL for getting API key
+	OAuthURL    string // OAuth authorization URL
+	Priority    int    // Lower = higher priority in Popular
+}
+
+// GetConnectProviders returns all providers for /connect UI (OpenCode style)
+func GetConnectProviders() []ConnectProvider {
+	providers := []ConnectProvider{
+		// Popular (우선순위 순)
+		{ID: "anthropic", Name: "Anthropic", Category: "Popular", AuthType: "api_key", EnvVar: "ANTHROPIC_API_KEY", AuthURL: "https://console.anthropic.com/settings/keys", Priority: 1},
+		{ID: "github-copilot", Name: "GitHub Copilot", Category: "Popular", AuthType: "oauth", EnvVar: "GITHUB_COPILOT_TOKEN", OAuthURL: "https://github.com/login/device", Priority: 2},
+		{ID: "openai", Name: "OpenAI", Category: "Popular", AuthType: "api_key", EnvVar: "OPENAI_API_KEY", AuthURL: "https://platform.openai.com/api-keys", Priority: 3},
+		{ID: "google", Name: "Google", Category: "Popular", AuthType: "api_key", EnvVar: "GOOGLE_API_KEY", AuthURL: "https://aistudio.google.com/apikey", Priority: 4},
+		{ID: "ollama", Name: "Ollama (Local)", Category: "Popular", AuthType: "none", Priority: 5},
+
+		// Other (알파벳 순)
+		{ID: "302ai", Name: "302.AI", Category: "Other", AuthType: "api_key", EnvVar: "API_302AI_KEY", AuthURL: "https://302.ai"},
+		{ID: "amazon-bedrock", Name: "Amazon Bedrock", Category: "Other", AuthType: "api_key", EnvVar: "AWS_ACCESS_KEY_ID", AuthURL: "https://aws.amazon.com/bedrock"},
+		{ID: "azure", Name: "Azure OpenAI", Category: "Other", AuthType: "api_key", EnvVar: "AZURE_OPENAI_API_KEY", AuthURL: "https://portal.azure.com"},
+		{ID: "baseten", Name: "Baseten", Category: "Other", AuthType: "api_key", EnvVar: "BASETEN_API_KEY", AuthURL: "https://baseten.co"},
+		{ID: "cerebras", Name: "Cerebras", Category: "Other", AuthType: "api_key", EnvVar: "CEREBRAS_API_KEY", AuthURL: "https://cloud.cerebras.ai"},
+		{ID: "chutes", Name: "Chutes", Category: "Other", AuthType: "api_key", EnvVar: "CHUTES_API_KEY", AuthURL: "https://chutes.ai"},
+		{ID: "cloudflare", Name: "Cloudflare Workers AI", Category: "Other", AuthType: "api_key", EnvVar: "CLOUDFLARE_API_TOKEN", AuthURL: "https://dash.cloudflare.com"},
+		{ID: "cohere", Name: "Cohere", Category: "Other", AuthType: "api_key", EnvVar: "COHERE_API_KEY", AuthURL: "https://dashboard.cohere.com/api-keys"},
+		{ID: "cortecs", Name: "Cortecs", Category: "Other", AuthType: "api_key", EnvVar: "CORTECS_API_KEY", AuthURL: "https://cortecs.ai"},
+		{ID: "deepseek", Name: "DeepSeek", Category: "Other", AuthType: "api_key", EnvVar: "DEEPSEEK_API_KEY", AuthURL: "https://platform.deepseek.com/api_keys"},
+		{ID: "fastrouter", Name: "FastRouter", Category: "Other", AuthType: "api_key", EnvVar: "FASTROUTER_API_KEY", AuthURL: "https://fastrouter.ai"},
+		{ID: "fireworks", Name: "Fireworks AI", Category: "Other", AuthType: "api_key", EnvVar: "FIREWORKS_API_KEY", AuthURL: "https://fireworks.ai"},
+		{ID: "github-models", Name: "GitHub Models", Category: "Other", AuthType: "api_key", EnvVar: "GITHUB_TOKEN", AuthURL: "https://github.com/settings/tokens"},
+		{ID: "groq", Name: "Groq", Category: "Other", AuthType: "api_key", EnvVar: "GROQ_API_KEY", AuthURL: "https://console.groq.com/keys"},
+		{ID: "helicone", Name: "Helicone", Category: "Other", AuthType: "api_key", EnvVar: "HELICONE_API_KEY", AuthURL: "https://helicone.ai"},
+		{ID: "huggingface", Name: "Hugging Face", Category: "Other", AuthType: "api_key", EnvVar: "HF_TOKEN", AuthURL: "https://huggingface.co/settings/tokens"},
+		{ID: "inception", Name: "Inception", Category: "Other", AuthType: "api_key", EnvVar: "INCEPTION_API_KEY", AuthURL: "https://inception.ai"},
+		{ID: "kimi", Name: "Kimi (Moonshot)", Category: "Other", AuthType: "api_key", EnvVar: "MOONSHOT_API_KEY", AuthURL: "https://platform.moonshot.cn/console/api-keys"},
+		{ID: "llamacloud", Name: "Llama Cloud", Category: "Other", AuthType: "api_key", EnvVar: "LLAMA_CLOUD_API_KEY", AuthURL: "https://cloud.llama.com"},
+		{ID: "minimax", Name: "MiniMax", Category: "Other", AuthType: "api_key", EnvVar: "MINIMAX_API_KEY", AuthURL: "https://minimax.chat"},
+		{ID: "mistral", Name: "Mistral AI", Category: "Other", AuthType: "api_key", EnvVar: "MISTRAL_API_KEY", AuthURL: "https://console.mistral.ai/api-keys"},
+		{ID: "moark", Name: "Moark", Category: "Other", AuthType: "api_key", EnvVar: "MOARK_API_KEY", AuthURL: "https://moark.ai"},
+		{ID: "nvidia", Name: "NVIDIA NIM", Category: "Other", AuthType: "api_key", EnvVar: "NVIDIA_API_KEY", AuthURL: "https://build.nvidia.com"},
+		{ID: "ollama-cloud", Name: "Ollama Cloud", Category: "Other", AuthType: "api_key", EnvVar: "OLLAMA_CLOUD_API_KEY", AuthURL: "https://ollama.com/cloud"},
+		{ID: "openrouter", Name: "OpenRouter", Category: "Other", AuthType: "api_key", EnvVar: "OPENROUTER_API_KEY", AuthURL: "https://openrouter.ai/keys"},
+		{ID: "perplexity", Name: "Perplexity", Category: "Other", AuthType: "api_key", EnvVar: "PERPLEXITY_API_KEY", AuthURL: "https://perplexity.ai/settings/api"},
+		{ID: "replicate", Name: "Replicate", Category: "Other", AuthType: "api_key", EnvVar: "REPLICATE_API_TOKEN", AuthURL: "https://replicate.com/account/api-tokens"},
+		{ID: "sambanova", Name: "SambaNova", Category: "Other", AuthType: "api_key", EnvVar: "SAMBANOVA_API_KEY", AuthURL: "https://sambanova.ai"},
+		{ID: "siliconflow", Name: "SiliconFlow", Category: "Other", AuthType: "api_key", EnvVar: "SILICONFLOW_API_KEY", AuthURL: "https://siliconflow.cn"},
+		{ID: "together", Name: "Together AI", Category: "Other", AuthType: "api_key", EnvVar: "TOGETHER_API_KEY", AuthURL: "https://api.together.ai/settings/api-keys"},
+		{ID: "upstage", Name: "Upstage", Category: "Other", AuthType: "api_key", EnvVar: "UPSTAGE_API_KEY", AuthURL: "https://console.upstage.ai"},
+		{ID: "vertex", Name: "Vertex AI", Category: "Other", AuthType: "api_key", EnvVar: "GOOGLE_APPLICATION_CREDENTIALS", AuthURL: "https://console.cloud.google.com/vertex-ai"},
+		{ID: "vivgrid", Name: "Vivgrid", Category: "Other", AuthType: "api_key", EnvVar: "VIVGRID_API_KEY", AuthURL: "https://vivgrid.com"},
+		{ID: "vultr", Name: "Vultr", Category: "Other", AuthType: "api_key", EnvVar: "VULTR_API_KEY", AuthURL: "https://my.vultr.com/settings/#settingsapi"},
+		{ID: "wandb", Name: "Weights & Biases", Category: "Other", AuthType: "api_key", EnvVar: "WANDB_API_KEY", AuthURL: "https://wandb.ai/authorize"},
+		{ID: "xai", Name: "xAI (Grok)", Category: "Other", AuthType: "api_key", EnvVar: "XAI_API_KEY", AuthURL: "https://console.x.ai"},
+	}
+
+	// Check connection status for each provider
+	for i := range providers {
+		providers[i].IsConnected = checkProviderConnected(&providers[i])
+	}
+
+	return providers
+}
+
+// checkProviderConnected checks if a provider is connected
+func checkProviderConnected(p *ConnectProvider) bool {
+	// First check auth store
+	store := auth.GetStore()
+	if store.IsConnected(p.ID) {
+		return true
+	}
+
+	switch p.AuthType {
+	case "none":
+		// For Ollama, check if server is running
+		if p.ID == "ollama" {
+			return checkOllamaAvailable()
+		}
+		return true
+	case "api_key":
+		return os.Getenv(p.EnvVar) != ""
+	case "oauth":
+		// Check for OAuth tokens in env
+		return os.Getenv(p.EnvVar) != ""
+	}
+	return false
+}
+
+// FilterConnectProviders filters providers by search query
+func FilterConnectProviders(providers []ConnectProvider, query string) []ConnectProvider {
+	if query == "" {
+		return providers
+	}
+
+	query = strings.ToLower(query)
+	var filtered []ConnectProvider
+	for _, p := range providers {
+		if strings.Contains(strings.ToLower(p.Name), query) ||
+			strings.Contains(strings.ToLower(p.ID), query) {
+			filtered = append(filtered, p)
+		}
+	}
+	return filtered
+}
 
 // ProviderInfo holds provider information for the TUI
 type ProviderInfo struct {
@@ -288,7 +401,7 @@ func NewOllamaClient() *OllamaClient {
 	return &OllamaClient{host: host}
 }
 
-// Chat sends a chat request to Ollama
+// Chat sends a chat request to Ollama (non-streaming)
 func (c *OllamaClient) Chat(ctx context.Context, model string, messages []Message) (string, error) {
 	type ollamaMessage struct {
 		Role    string `json:"role"`
@@ -350,6 +463,89 @@ func (c *OllamaClient) Chat(ctx context.Context, model string, messages []Messag
 	}
 
 	return result.Message.Content, nil
+}
+
+// ChatStream sends a streaming chat request to Ollama
+func (c *OllamaClient) ChatStream(ctx context.Context, model string, messages []Message, onChunk func(string)) error {
+	type ollamaMessage struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+
+	type chatRequest struct {
+		Model    string          `json:"model"`
+		Messages []ollamaMessage `json:"messages"`
+		Stream   bool            `json:"stream"`
+	}
+
+	ollamaMsgs := make([]ollamaMessage, 0, len(messages))
+	for _, m := range messages {
+		if m.Role != "system" || m.Content != "" {
+			ollamaMsgs = append(ollamaMsgs, ollamaMessage{
+				Role:    m.Role,
+				Content: m.Content,
+			})
+		}
+	}
+
+	reqBody := chatRequest{
+		Model:    model,
+		Messages: ollamaMsgs,
+		Stream:   true,
+	}
+
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.host+"/api/chat", bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("ollama request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("ollama returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Stream response
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var chunk struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+			Done bool `json:"done"`
+		}
+
+		if err := json.Unmarshal(line, &chunk); err != nil {
+			continue
+		}
+
+		if chunk.Message.Content != "" {
+			onChunk(chunk.Message.Content)
+		}
+
+		if chunk.Done {
+			break
+		}
+	}
+
+	return scanner.Err()
 }
 
 // PullModel downloads a model

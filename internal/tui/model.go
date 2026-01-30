@@ -5,10 +5,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
+	"devorch/internal/auth"
 	"devorch/internal/session"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -58,6 +61,9 @@ const (
 	ViewModeMCP            // MCP server management
 	ViewModeSetup          // Auto setup wizard
 	ViewModeAgentSelect    // Agent mode selection
+	ViewModeInstallSelect  // Model installation selection
+	ViewModeLanguageSelect // Language selection
+	ViewModeConnect        // OpenCode-style provider connect
 )
 
 // Model represents the main TUI application state.
@@ -97,9 +103,20 @@ type Model struct {
 	filteredCommands        []SlashCommand
 
 	// Selection lists (for models, themes, providers)
-	selectionList  []string
-	selectionIdx   int
-	selectionTitle string
+	selectionList      []string
+	selectionIdx       int
+	selectionTitle     string
+	installableModels  []InstallableModel // For /install selection
+	selectedModelIdxs  map[int]bool       // Multi-selection for install
+	installSystemSpecs SystemSpecs        // System specs for install
+
+	// Connect mode (OpenCode style)
+	connectProviders    []ConnectProvider // All providers for /connect
+	connectSelectedIdx  int               // Selected provider index
+	connectFilter       string            // Search filter
+	connectFilteredList []ConnectProvider // Filtered providers
+	connectInputMode    bool              // true = API key input mode
+	apiKeyInput         textinput.Model   // API key input field
 
 	// Display options (OpenCode style)
 	showDetails  bool // Show token count, timing, model info
@@ -198,9 +215,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.handleStreamChunk(msg)
 		m.viewport.SetContent(m.renderMessages())
 		m.viewport.GotoBottom()
+		// If this chunk has a NextCmd, execute it to get the next chunk
+		if msg.NextCmd != nil && !msg.Done {
+			cmds = append(cmds, func() tea.Msg { return msg.NextCmd() })
+		}
+		// If marked as done, stop streaming
+		if msg.Done {
+			m.isStreaming = false
+		}
 
 	case StreamDoneMsg:
 		m.isStreaming = false
+		m.viewport.SetContent(m.renderMessages())
+		m.viewport.GotoBottom()
 
 	case ErrorMsg:
 		m.err = msg.Err
@@ -239,8 +266,12 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 	case ViewModeCommands:
 		return m.handleCommandPaletteKey(msg)
-	case ViewModeThemeSelect, ViewModeModelSelect, ViewModeProviderSelect, ViewModeLogin, ViewModeAgentSelect:
+	case ViewModeThemeSelect, ViewModeModelSelect, ViewModeProviderSelect, ViewModeLogin, ViewModeAgentSelect, ViewModeLanguageSelect:
 		return m.handleSelectionKey(msg)
+	case ViewModeInstallSelect:
+		return m.handleInstallSelectionKey(msg)
+	case ViewModeConnect:
+		return m.handleConnectKey(msg)
 	}
 
 	// Handle interactive command autocomplete
@@ -519,6 +550,8 @@ func (m Model) handleSelectionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						Content: fmt.Sprintf("🤖 Agent mode: %s\n\nYour AI assistant will now focus on %s tasks.", agentMode, agentMode),
 					})
 				}
+			case ViewModeLanguageSelect:
+				m.handleLanguageSelection(selected)
 			case ViewModeLogin:
 				// Open browser for the selected provider
 				providerMap := map[int]string{
@@ -571,6 +604,26 @@ func (m Model) handleSelectionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// handleLanguageSelection applies the selected language
+func (m Model) handleLanguageSelection(selection string) {
+	langMap := map[string]string{
+		"English (en)":  "en",
+		"한국어 (ko)":      "ko",
+		"日本語 (ja)":      "ja",
+		"中文 (zh)":       "zh",
+		"Español (es)":  "es",
+		"Français (fr)": "fr",
+		"Deutsch (de)":  "de",
+	}
+
+	if code, ok := langMap[selection]; ok {
+		m.messages = append(m.messages, Message{
+			Role:    "system",
+			Content: fmt.Sprintf("🌐 Language changed to: %s\n\nNote: Full i18n support coming soon!", code),
+		})
+	}
 }
 
 // sendMessage sends the current input as a message.
@@ -651,8 +704,12 @@ func (m Model) View() string {
 		return m.viewHelp()
 	case ViewModeCommands:
 		return m.viewCommandPalette()
-	case ViewModeThemeSelect, ViewModeModelSelect, ViewModeProviderSelect, ViewModeLogin, ViewModeAgentSelect:
+	case ViewModeThemeSelect, ViewModeModelSelect, ViewModeProviderSelect, ViewModeLogin, ViewModeAgentSelect, ViewModeLanguageSelect:
 		return m.viewSelectionList()
+	case ViewModeInstallSelect:
+		return m.viewInstallSelection()
+	case ViewModeConnect:
+		return m.viewConnect()
 	case ViewModeSettings:
 		return m.viewSettings()
 	case ViewModeSetup:
@@ -797,6 +854,103 @@ func (m Model) viewSelectionList() string {
 	}
 
 	b.WriteString("\n\n" + m.theme.Subtle.Render("Enter: Select | Esc: Cancel | ↑/↓: Navigate"))
+
+	return b.String()
+}
+
+// viewInstallSelection renders the model installation selection view
+func (m Model) viewInstallSelection() string {
+	var b strings.Builder
+
+	// Header with system specs
+	title := m.theme.Title.Render("📦 Model Installation")
+	b.WriteString(title + "\n\n")
+
+	specs := m.installSystemSpecs
+	b.WriteString(m.theme.Accent.Render("🖥️  System Specs:") + "\n")
+	b.WriteString(fmt.Sprintf("  RAM: %.1f GB  |  CPU: %d cores  |  %s\n\n", specs.RAM, specs.CPUCores, specs.Tier))
+
+	// Count selections
+	selectedCount := 0
+	var totalSize float64
+	for idx := range m.selectedModelIdxs {
+		if idx < len(m.installableModels) && !m.installableModels[idx].Installed {
+			selectedCount++
+			// Parse size (e.g., "1.3GB" -> 1.3)
+			sizeStr := m.installableModels[idx].Size
+			var size float64
+			fmt.Sscanf(sizeStr, "%fGB", &size)
+			totalSize += size
+		}
+	}
+
+	b.WriteString(m.theme.Accent.Render(fmt.Sprintf("Selected: %d models (%.1f GB total)\n\n", selectedCount, totalSize)))
+
+	// Group models by category
+	currentCategory := ""
+	maxShow := 15
+	startIdx := 0
+	if m.selectionIdx >= maxShow {
+		startIdx = m.selectionIdx - maxShow + 1
+	}
+	endIdx := startIdx + maxShow
+	if endIdx > len(m.installableModels) {
+		endIdx = len(m.installableModels)
+	}
+
+	for i := startIdx; i < endIdx; i++ {
+		model := m.installableModels[i]
+
+		// Show category header
+		if model.Category != currentCategory {
+			if currentCategory != "" {
+				b.WriteString("\n")
+			}
+			b.WriteString(m.theme.Accent.Render(model.Category) + "\n")
+			currentCategory = model.Category
+		}
+
+		// Selection indicator
+		checkbox := "[ ]"
+		if model.Installed {
+			checkbox = m.theme.Success.Render("[✓]")
+		} else if m.selectedModelIdxs[i] {
+			checkbox = m.theme.Accent.Render("[◉]")
+		}
+
+		// Cursor
+		cursor := "  "
+		style := m.theme.Normal
+		if i == m.selectionIdx {
+			cursor = "▶ "
+			style = m.theme.Selected
+		}
+
+		// Format line
+		line := fmt.Sprintf("%s%s %s (%s) - %s",
+			cursor,
+			checkbox,
+			model.Name,
+			model.Size,
+			model.Description,
+		)
+
+		// Truncate if too long
+		maxLen := m.width - 4
+		if len(line) > maxLen && maxLen > 20 {
+			line = line[:maxLen-3] + "..."
+		}
+
+		b.WriteString(style.Render(line) + "\n")
+	}
+
+	// Scroll indicator
+	if endIdx < len(m.installableModels) {
+		b.WriteString(m.theme.Subtle.Render(fmt.Sprintf("\n  ↓ %d more models below\n", len(m.installableModels)-endIdx)))
+	}
+
+	// Footer
+	b.WriteString("\n" + m.theme.Subtle.Render("Space: Toggle | A: All recommended | N: None | Enter: Install | Esc: Cancel"))
 
 	return b.String()
 }
@@ -1009,6 +1163,8 @@ func (m Model) renderFooter() string {
 // StreamChunkMsg represents a streaming chunk from the LLM.
 type StreamChunkMsg struct {
 	Content string
+	Done    bool
+	NextCmd func() tea.Msg
 }
 
 // StreamDoneMsg indicates streaming is complete.
@@ -1050,23 +1206,31 @@ func GetActiveProvider() ActiveProvider {
 }
 
 func (m Model) sendToLLM(text string) tea.Cmd {
+	active := GetActiveProvider()
+
+	// Convert messages to the right format (skip system welcome message)
+	var chatMsgs []Message
+	for _, msg := range m.messages {
+		if msg.Role == "system" && strings.Contains(msg.Content, "Welcome to DevOrch") {
+			continue
+		}
+		chatMsgs = append(chatMsgs, msg)
+	}
+	chatMsgs = append(chatMsgs, Message{Role: "user", Content: text})
+
+	// Use streaming for Ollama, non-streaming for others
+	if active.Provider == "ollama" {
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		// Don't defer cancel here - let it be cancelled when streaming completes
+		_ = cancel
+		return m.sendToLLMStreaming(ctx, active, chatMsgs)
+	}
+
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
-		active := GetActiveProvider()
-
-		// Convert messages to the right format (skip system welcome message)
-		var chatMsgs []Message
-		for _, msg := range m.messages {
-			if msg.Role == "system" && strings.Contains(msg.Content, "Welcome to DevOrch") {
-				continue
-			}
-			chatMsgs = append(chatMsgs, msg)
-		}
-		chatMsgs = append(chatMsgs, Message{Role: "user", Content: text})
-
-		// Use the unified ChatWithProvider function
+		// Use the unified ChatWithProvider function for non-streaming
 		response, err := ChatWithProvider(ctx, active.Provider, active.Model, chatMsgs)
 		if err != nil {
 			// Provider-specific error messages
@@ -1110,6 +1274,89 @@ func (m Model) sendToLLM(text string) tea.Cmd {
 		}
 
 		return StreamChunkMsg{Content: response}
+	}
+}
+
+// sendToLLMStreaming handles streaming responses from Ollama
+func (m Model) sendToLLMStreaming(ctx context.Context, active ActiveProvider, chatMsgs []Message) tea.Cmd {
+	return func() tea.Msg {
+		client := NewOllamaClient()
+
+		// Start assistant message immediately
+		return tea.Batch(
+			func() tea.Msg {
+				// Channel to send chunks
+				chunkChan := make(chan string, 100)
+				doneChan := make(chan error, 1)
+
+				// Start streaming in goroutine
+				go func() {
+					defer close(chunkChan)
+					defer close(doneChan)
+
+					err := client.ChatStream(ctx, active.Model, chatMsgs, func(chunk string) {
+						select {
+						case chunkChan <- chunk:
+						case <-ctx.Done():
+							return
+						}
+					})
+
+					if err != nil {
+						doneChan <- err
+					} else {
+						doneChan <- nil
+					}
+				}()
+
+				// Return a command that continuously reads from the channel
+				return streamNextChunk(chunkChan, doneChan, active.Model)
+			},
+		)()
+	}
+}
+
+// streamNextChunk reads the next chunk from the channel
+func streamNextChunk(chunkChan chan string, doneChan chan error, model string) tea.Msg {
+	select {
+	case chunk, ok := <-chunkChan:
+		if !ok {
+			// Channel closed, check for errors
+			select {
+			case err := <-doneChan:
+				if err != nil {
+					if strings.Contains(err.Error(), "model") || strings.Contains(err.Error(), "not found") {
+						return StreamChunkMsg{
+							Content: fmt.Sprintf("❌ Model '%s' not found.\n\nPlease install it first:\n  ollama pull %s\n\nOr run 'devorch setup' to install essential models.", model, model),
+							Done:    true,
+						}
+					}
+					return StreamChunkMsg{
+						Content: fmt.Sprintf("❌ Ollama error: %v\n\nMake sure Ollama is running: ollama serve", err),
+						Done:    true,
+					}
+				}
+				return StreamDoneMsg{}
+			default:
+				return StreamDoneMsg{}
+			}
+		}
+		// Return this chunk and schedule next read
+		return StreamChunkMsg{Content: chunk, NextCmd: func() tea.Msg { return streamNextChunk(chunkChan, doneChan, model) }}
+	case err := <-doneChan:
+		if err != nil {
+			if strings.Contains(err.Error(), "model") || strings.Contains(err.Error(), "not found") {
+				return StreamChunkMsg{
+					Content: fmt.Sprintf("❌ Model '%s' not found.\n\nPlease install it first:\n  ollama pull %s\n\nOr run 'devorch setup' to install essential models.", model, model),
+					Done:    true,
+				}
+			}
+			return StreamChunkMsg{
+				Content: fmt.Sprintf("❌ Ollama error: %v\n\nMake sure Ollama is running: ollama serve", err),
+				Done:    true,
+			}
+		}
+		return StreamDoneMsg{}
 	}
 }
 
@@ -1253,4 +1500,427 @@ func (m Model) loadSessionMessages(sessionID string) tea.Cmd {
 // SessionMessagesLoadedMsg is sent when session messages are loaded
 type SessionMessagesLoadedMsg struct {
 	Messages []Message
+}
+
+// handleInstallSelectionKey handles keys in install selection mode
+func (m Model) handleInstallSelectionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "ctrl+c", "q":
+		m.mode = ViewModeChat
+		return m, nil
+
+	case "enter":
+		// Start installation of selected models
+		var toInstall []string
+		for idx := range m.selectedModelIdxs {
+			if idx < len(m.installableModels) && !m.installableModels[idx].Installed {
+				toInstall = append(toInstall, m.installableModels[idx].ID)
+			}
+		}
+
+		if len(toInstall) > 0 {
+			// Start background installation
+			for _, id := range toInstall {
+				go func(modelID string) {
+					exec.Command("ollama", "pull", modelID).Run()
+				}(id)
+			}
+
+			m.messages = append(m.messages, Message{
+				Role:    "system",
+				Content: fmt.Sprintf("⬇️  Installing %d models in background:\n%s\n\n💡 Check progress: ollama ps", len(toInstall), strings.Join(toInstall, ", ")),
+			})
+		} else {
+			m.messages = append(m.messages, Message{
+				Role:    "system",
+				Content: "✅ No new models selected for installation.",
+			})
+		}
+
+		m.mode = ViewModeChat
+		return m, nil
+
+	case "up", "k":
+		if m.selectionIdx > 0 {
+			m.selectionIdx--
+		} else {
+			m.selectionIdx = len(m.installableModels) - 1
+		}
+		return m, nil
+
+	case "down", "j":
+		if m.selectionIdx < len(m.installableModels)-1 {
+			m.selectionIdx++
+		} else {
+			m.selectionIdx = 0
+		}
+		return m, nil
+
+	case " ": // Space to toggle selection
+		if m.selectionIdx >= 0 && m.selectionIdx < len(m.installableModels) {
+			if !m.installableModels[m.selectionIdx].Installed {
+				if m.selectedModelIdxs[m.selectionIdx] {
+					delete(m.selectedModelIdxs, m.selectionIdx)
+				} else {
+					m.selectedModelIdxs[m.selectionIdx] = true
+				}
+			}
+		}
+		return m, nil
+
+	case "a": // Select all recommended
+		for i, model := range m.installableModels {
+			if model.Recommended && !model.Installed {
+				m.selectedModelIdxs[i] = true
+			}
+		}
+		return m, nil
+
+	case "n": // Clear selection
+		m.selectedModelIdxs = make(map[int]bool)
+		return m, nil
+	}
+
+	return m, nil
+}
+
+// viewConnect renders the OpenCode-style provider connect view
+func (m Model) viewConnect() string {
+	var sb strings.Builder
+
+	// Header
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("39")).
+		Padding(1, 2)
+
+	subtitleStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("241")).
+		Padding(0, 2)
+
+	sb.WriteString(titleStyle.Render("🔗 Connect a Provider"))
+	sb.WriteString("\n")
+	sb.WriteString(subtitleStyle.Render("Select a provider to connect. Use ↑↓ to navigate, Enter to select, / to search"))
+	sb.WriteString("\n\n")
+
+	// If in API key input mode
+	if m.connectInputMode {
+		provider := m.connectFilteredList[m.connectSelectedIdx]
+		sb.WriteString(lipgloss.NewStyle().Padding(0, 2).Render(
+			fmt.Sprintf("Enter API key for %s:\n", provider.Name)))
+		sb.WriteString(lipgloss.NewStyle().Padding(0, 2).Render(
+			fmt.Sprintf("Environment variable: %s\n\n", provider.EnvVar)))
+		sb.WriteString(lipgloss.NewStyle().Padding(0, 2).Render(m.apiKeyInput.View()))
+		sb.WriteString("\n\n")
+		sb.WriteString(lipgloss.NewStyle().Padding(0, 2).Foreground(lipgloss.Color("241")).Render(
+			"Press Enter to save • Esc to cancel • Press 'o' to open browser for key"))
+		return sb.String()
+	}
+
+	// Search bar
+	if m.connectFilter != "" {
+		searchStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("39")).
+			Padding(0, 2)
+		sb.WriteString(searchStyle.Render(fmt.Sprintf("🔍 %s", m.connectFilter)))
+		sb.WriteString("\n\n")
+	}
+
+	// Provider list
+	providers := m.connectFilteredList
+	if len(providers) == 0 {
+		sb.WriteString(lipgloss.NewStyle().Padding(0, 2).Foreground(lipgloss.Color("241")).Render(
+			"No providers match your search."))
+		return sb.String()
+	}
+
+	// Group by category
+	popularProviders := []ConnectProvider{}
+	otherProviders := []ConnectProvider{}
+	for _, p := range providers {
+		if p.Category == "Popular" {
+			popularProviders = append(popularProviders, p)
+		} else {
+			otherProviders = append(otherProviders, p)
+		}
+	}
+
+	// Calculate which provider is currently selected across all groups
+	currentIdx := 0
+	categoryHeaderStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("141")).
+		Padding(0, 2)
+
+	itemStyle := lipgloss.NewStyle().Padding(0, 2)
+	selectedStyle := lipgloss.NewStyle().
+		Padding(0, 2).
+		Background(lipgloss.Color("39")).
+		Foreground(lipgloss.Color("15"))
+	connectedStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("42"))
+
+	maxShow := 15
+	startIdx := 0
+	totalItems := len(providers)
+	if m.connectSelectedIdx >= maxShow {
+		startIdx = m.connectSelectedIdx - maxShow + 1
+	}
+
+	// Render Popular
+	if len(popularProviders) > 0 && startIdx < len(popularProviders) {
+		sb.WriteString(categoryHeaderStyle.Render("Popular"))
+		sb.WriteString("\n")
+
+		for i, p := range popularProviders {
+			if currentIdx < startIdx {
+				currentIdx++
+				continue
+			}
+			if currentIdx-startIdx >= maxShow {
+				break
+			}
+
+			name := p.Name
+			suffix := ""
+			if p.IsConnected {
+				suffix = connectedStyle.Render(" Connected")
+			}
+
+			line := fmt.Sprintf("  %s%s", name, suffix)
+			if currentIdx == m.connectSelectedIdx {
+				sb.WriteString(selectedStyle.Render(fmt.Sprintf("▸ %s%s", name, suffix)))
+			} else {
+				sb.WriteString(itemStyle.Render(line))
+			}
+			sb.WriteString("\n")
+			currentIdx++
+			_ = i
+		}
+		sb.WriteString("\n")
+	} else {
+		currentIdx = len(popularProviders)
+	}
+
+	// Render Other
+	if len(otherProviders) > 0 && currentIdx-startIdx < maxShow {
+		sb.WriteString(categoryHeaderStyle.Render("Other"))
+		sb.WriteString("\n")
+
+		for i, p := range otherProviders {
+			globalIdx := len(popularProviders) + i
+			if globalIdx < startIdx {
+				continue
+			}
+			if globalIdx-startIdx >= maxShow {
+				break
+			}
+
+			name := p.Name
+			suffix := ""
+			if p.IsConnected {
+				suffix = connectedStyle.Render(" Connected")
+			}
+
+			line := fmt.Sprintf("  %s%s", name, suffix)
+			if globalIdx == m.connectSelectedIdx {
+				sb.WriteString(selectedStyle.Render(fmt.Sprintf("▸ %s%s", name, suffix)))
+			} else {
+				sb.WriteString(itemStyle.Render(line))
+			}
+			sb.WriteString("\n")
+		}
+	}
+
+	// Scroll indicator
+	if totalItems > maxShow {
+		sb.WriteString("\n")
+		sb.WriteString(lipgloss.NewStyle().Padding(0, 2).Foreground(lipgloss.Color("241")).Render(
+			fmt.Sprintf("  %d of %d providers", m.connectSelectedIdx+1, totalItems)))
+	}
+
+	// Footer
+	sb.WriteString("\n\n")
+	sb.WriteString(lipgloss.NewStyle().Padding(0, 2).Foreground(lipgloss.Color("241")).Render(
+		"↑↓ Navigate • Enter Select • / Search • Esc Cancel"))
+
+	return sb.String()
+}
+
+// handleConnectKey handles keys in connect mode
+func (m Model) handleConnectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// API key input mode
+	if m.connectInputMode {
+		switch msg.String() {
+		case "esc":
+			m.connectInputMode = false
+			return m, nil
+		case "enter":
+			// Save the API key
+			apiKey := strings.TrimSpace(m.apiKeyInput.Value())
+			if apiKey != "" {
+				provider := m.connectFilteredList[m.connectSelectedIdx]
+				// Save using auth store
+				if err := auth.SetAPIKey(provider.ID, apiKey); err != nil {
+					m.messages = append(m.messages, Message{
+						Role:    "system",
+						Content: fmt.Sprintf("❌ Failed to save API key: %v", err),
+					})
+				} else {
+					// Also set environment variable for this session
+					os.Setenv(provider.EnvVar, apiKey)
+					m.messages = append(m.messages, Message{
+						Role: "system",
+						Content: fmt.Sprintf("✅ Connected to %s!\n\nAPI key saved to ~/.config/devorch/auth.json",
+							provider.Name),
+					})
+				}
+				m.connectInputMode = false
+				m.mode = ViewModeChat
+				// Refresh connection status
+				m.connectProviders = GetConnectProviders()
+				m.connectFilteredList = FilterConnectProviders(m.connectProviders, m.connectFilter)
+			}
+			return m, nil
+		case "o":
+			// Open browser for API key
+			provider := m.connectFilteredList[m.connectSelectedIdx]
+			if provider.AuthURL != "" {
+				OpenBrowser(provider.AuthURL)
+			}
+			return m, nil
+		default:
+			var cmd tea.Cmd
+			m.apiKeyInput, cmd = m.apiKeyInput.Update(msg)
+			return m, cmd
+		}
+	}
+
+	switch msg.String() {
+	case "esc", "ctrl+c":
+		m.mode = ViewModeChat
+		m.connectFilter = ""
+		return m, nil
+
+	case "enter":
+		if m.connectSelectedIdx >= 0 && m.connectSelectedIdx < len(m.connectFilteredList) {
+			provider := m.connectFilteredList[m.connectSelectedIdx]
+
+			// Get auth config for this provider
+			authConfig := auth.ProviderConfigs[provider.ID]
+
+			switch provider.AuthType {
+			case "none":
+				// For local providers like Ollama
+				if provider.IsConnected {
+					m.messages = append(m.messages, Message{
+						Role:    "system",
+						Content: fmt.Sprintf("✅ %s is already running and ready!", provider.Name),
+					})
+				} else {
+					m.messages = append(m.messages, Message{
+						Role:    "system",
+						Content: fmt.Sprintf("❌ %s is not running.\n\n💡 Start it with: ollama serve", provider.Name),
+					})
+				}
+				m.mode = ViewModeChat
+
+			case "oauth":
+				if authConfig != nil && authConfig.DeviceFlow != nil {
+					// Device Code Flow (GitHub Copilot style)
+					m.messages = append(m.messages, Message{
+						Role:    "system",
+						Content: fmt.Sprintf("🔐 Starting device authorization for %s...\n\nPlease use CLI mode (devorch cli) for OAuth authentication.", provider.Name),
+					})
+				} else if authConfig != nil && authConfig.OAuth != nil {
+					// OAuth PKCE Flow
+					m.messages = append(m.messages, Message{
+						Role:    "system",
+						Content: fmt.Sprintf("🔐 Starting OAuth for %s...\n\nPlease use CLI mode (devorch cli) for OAuth authentication.", provider.Name),
+					})
+				} else if provider.OAuthURL != "" {
+					// Fallback - open browser
+					OpenBrowser(provider.OAuthURL)
+					m.messages = append(m.messages, Message{
+						Role: "system",
+						Content: fmt.Sprintf("🌐 Opening browser for %s authentication...\n\nFollow the instructions in your browser to complete the OAuth flow.",
+							provider.Name),
+					})
+				}
+				m.mode = ViewModeChat
+
+			case "api_key":
+				store := auth.GetStore()
+				if store.IsConnected(provider.ID) || provider.IsConnected {
+					// Already connected - ask if they want to reconnect
+					m.messages = append(m.messages, Message{
+						Role:    "system",
+						Content: fmt.Sprintf("✅ %s is already connected!\n\nTo update your API key, enter a new one below:", provider.Name),
+					})
+				}
+				// Enter API key input mode
+				m.connectInputMode = true
+				m.apiKeyInput = textinput.New()
+				m.apiKeyInput.Placeholder = "Paste your API key here..."
+				m.apiKeyInput.EchoMode = textinput.EchoPassword
+				m.apiKeyInput.Focus()
+				m.apiKeyInput.Width = 60
+			}
+		}
+		return m, nil
+
+	case "up", "k":
+		if m.connectSelectedIdx > 0 {
+			m.connectSelectedIdx--
+		}
+		return m, nil
+
+	case "down", "j":
+		if m.connectSelectedIdx < len(m.connectFilteredList)-1 {
+			m.connectSelectedIdx++
+		}
+		return m, nil
+
+	case "/":
+		// Focus on search - for now just show a message
+		// In a full implementation, we'd switch to search input mode
+		return m, nil
+
+	case "backspace":
+		if len(m.connectFilter) > 0 {
+			m.connectFilter = m.connectFilter[:len(m.connectFilter)-1]
+			m.connectFilteredList = FilterConnectProviders(m.connectProviders, m.connectFilter)
+			if m.connectSelectedIdx >= len(m.connectFilteredList) {
+				m.connectSelectedIdx = max(0, len(m.connectFilteredList)-1)
+			}
+		}
+		return m, nil
+
+	default:
+		// Typing - add to filter
+		if len(msg.String()) == 1 && msg.String() != " " {
+			m.connectFilter += msg.String()
+			m.connectFilteredList = FilterConnectProviders(m.connectProviders, m.connectFilter)
+			if m.connectSelectedIdx >= len(m.connectFilteredList) {
+				m.connectSelectedIdx = max(0, len(m.connectFilteredList)-1)
+			}
+		}
+		return m, nil
+	}
+}
+
+// OpenBrowser opens a URL in the default browser
+func OpenBrowser(url string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		return fmt.Errorf("unsupported platform")
+	}
+	return cmd.Start()
 }
