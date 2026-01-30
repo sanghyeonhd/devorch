@@ -43,78 +43,76 @@ func (i commandItem) Description() string { return i.description }
 func (i commandItem) FilterValue() string { return i.name }
 
 // GetSlashCommands returns all available slash commands.
-// Synchronized with cli_mode.go handleCommand - 52 commands total
+// Synchronized with cli_mode.go - 16 core command groups + shortcuts
 func GetSlashCommands() []SlashCommand {
 	commands := []SlashCommand{
-		// Session & History (8 commands)
-		{Name: "new", Description: "Start new session", Category: "Session", Handler: cmdNew},
-		{Name: "sessions", Description: "List/switch sessions", Category: "Session", Handler: cmdSessions},
-		{Name: "save", Description: "Save current session", Category: "Session", Handler: cmdSave},
-		{Name: "clear", Description: "Clear chat history", Category: "Session", Handler: cmdClear},
-		{Name: "export", Description: "Export session to file", Category: "Session", Handler: cmdExport},
-		{Name: "reset", Description: "Reset session completely", Category: "Session", Handler: cmdReset},
-		{Name: "share", Description: "Share session online", Category: "Session", Handler: cmdShare},
-		{Name: "unshare", Description: "Remove shared session", Category: "Session", Handler: cmdUnshare},
+		// Quick Commands (shortcuts)
+		{Name: "help", Description: "Show help", Category: "Quick", Handler: cmdHelp},
+		{Name: "exit", Description: "Exit DevOrch", Category: "Quick", Handler: cmdQuit},
+		{Name: "quit", Description: "Exit DevOrch (alias)", Category: "Quick", Handler: cmdQuit},
+		{Name: "clear", Description: "Clear chat", Category: "Quick", Handler: cmdClear},
+		{Name: "cls", Description: "Clear chat (alias)", Category: "Quick", Handler: cmdClear},
+		{Name: "new", Description: "New session", Category: "Quick", Handler: cmdNew},
+		{Name: "init", Description: "Initialize project", Category: "Quick", Handler: cmdInit},
+		{Name: "history", Description: "Show chat history", Category: "Quick", Handler: cmdHistory},
+		{Name: "mode", Description: "Switch work mode (ask/edit/agent/plan)", Category: "Quick", Handler: cmdModeGroup},
+		{Name: "multimodel", Description: "Select multiple models for comparison", Category: "Quick", Handler: cmdMultiModel},
+		{Name: "preset", Description: "Model preset management (save/load/list)", Category: "Quick", Handler: cmdPresetGroup},
 
-		// Edit & Code (7 commands)
-		{Name: "undo", Description: "Undo last change", Category: "Edit", Handler: cmdUndo},
-		{Name: "redo", Description: "Redo last undo", Category: "Edit", Handler: cmdRedo},
-		{Name: "compact", Description: "Compress session history", Category: "Edit", Handler: cmdCompact},
+		// Main Command Groups (16 core groups)
+		{Name: "session", Description: "Session management (new, list, save, export...)", Category: "Main", Handler: cmdSessionGroup},
+		{Name: "model", Description: "Model management (list, set, install, bench)", Category: "Main", Handler: cmdModelGroup},
+		{Name: "provider", Description: "Provider management (list, connect, disconnect)", Category: "Main", Handler: cmdProviderGroup},
+		{Name: "agent", Description: "Agent management (list, set)", Category: "Main", Handler: cmdAgentGroup},
+		{Name: "code", Description: "Code/file operations (files, grep, diff, review)", Category: "Main", Handler: cmdCodeGroup},
+		{Name: "context", Description: "Context management (add, memory, thinking)", Category: "Main", Handler: cmdContextGroup},
+		{Name: "tools", Description: "Tool management (mcp, lsp)", Category: "Main", Handler: cmdToolsGroup},
+		{Name: "config", Description: "Configuration (theme, lang, edit)", Category: "Main", Handler: cmdConfigGroup},
+		{Name: "auth", Description: "Authentication (login, logout, status)", Category: "Main", Handler: cmdAuthGroup},
+		{Name: "system", Description: "System (status, setup, doctor, version)", Category: "Main", Handler: cmdSystemGroup},
+
+		// Legacy commands (with deprecation tips)
+		{Name: "models", Description: "[Deprecated] Use /model list", Category: "Legacy", Handler: cmdModels},
+		{Name: "themes", Description: "[Deprecated] Use /config themes", Category: "Legacy", Handler: cmdTheme},
+		{Name: "status", Description: "[Deprecated] Use /system status", Category: "Legacy", Handler: cmdStatus},
+		{Name: "agents", Description: "[Deprecated] Use /agent list", Category: "Legacy", Handler: cmdAgents},
+		{Name: "sessions", Description: "[Deprecated] Use /session list", Category: "Legacy", Handler: cmdSessions},
+		{Name: "files", Description: "[Deprecated] Use /code files", Category: "Legacy", Handler: cmdFiles},
+		{Name: "grep", Description: "[Deprecated] Use /code grep", Category: "Legacy", Handler: cmdGrep},
+		{Name: "diff", Description: "[Deprecated] Use /code diff", Category: "Legacy", Handler: cmdDiff},
+		{Name: "doctor", Description: "[Deprecated] Use /system doctor", Category: "Legacy", Handler: cmdDoctor},
+		{Name: "version", Description: "[Deprecated] Use /system version", Category: "Legacy", Handler: cmdVersion},
+		{Name: "install", Description: "[Deprecated] Use /model install", Category: "Legacy", Handler: cmdInstall},
+		{Name: "bench", Description: "[Deprecated] Use /model bench", Category: "Legacy", Handler: cmdBench},
+		{Name: "login", Description: "[Deprecated] Use /auth login", Category: "Legacy", Handler: cmdLogin},
+		{Name: "logout", Description: "[Deprecated] Use /auth logout", Category: "Legacy", Handler: cmdLogout},
+		{Name: "setup", Description: "[Deprecated] Use /system setup", Category: "Legacy", Handler: cmdSetup},
+		{Name: "language", Description: "[Deprecated] Use /config lang", Category: "Legacy", Handler: cmdLanguage},
+
+		// Subcommands (for autocomplete)
+		{Name: "save", Description: "Save current session", Category: "Session", Handler: cmdSave},
+		{Name: "export", Description: "Export session", Category: "Session", Handler: cmdExport},
+		{Name: "share", Description: "Share session", Category: "Session", Handler: cmdShare},
+		{Name: "unshare", Description: "Unshare session", Category: "Session", Handler: cmdUnshare},
+		{Name: "compact", Description: "Compact history", Category: "Session", Handler: cmdCompact},
+		{Name: "reset", Description: "Reset session", Category: "Session", Handler: cmdReset},
+		{Name: "undo", Description: "Undo last change", Category: "Session", Handler: cmdUndo},
+		{Name: "redo", Description: "Redo last undo", Category: "Session", Handler: cmdRedo},
+		{Name: "details", Description: "Show session details", Category: "Session", Handler: cmdDetails},
+		{Name: "review", Description: "Review code", Category: "Code", Handler: cmdReview},
+		{Name: "editor", Description: "Open in editor", Category: "Code", Handler: cmdEditor},
+		{Name: "git", Description: "Git operations", Category: "Code", Handler: cmdGit},
+		{Name: "add", Description: "Add to context", Category: "Context", Handler: cmdAdd},
+		{Name: "memory", Description: "Show memory", Category: "Context", Handler: cmdMemory},
+		{Name: "thinking", Description: "Toggle thinking mode", Category: "Context", Handler: cmdThinking},
+		{Name: "connect", Description: "Connect provider", Category: "Provider", Handler: cmdConnect},
+		{Name: "lsp", Description: "LSP status", Category: "Tools", Handler: cmdLSP},
+		{Name: "mcps", Description: "MCP servers", Category: "Tools", Handler: cmdMCP},
+		{Name: "settings", Description: "Show settings", Category: "Config", Handler: cmdSettings},
+		{Name: "theme", Description: "Switch theme", Category: "Config", Handler: cmdThemeSwitch},
 		{Name: "copy", Description: "Copy to clipboard", Category: "Edit", Handler: cmdCopy},
 		{Name: "paste", Description: "Paste from clipboard", Category: "Edit", Handler: cmdPaste},
-		{Name: "details", Description: "Show last response details", Category: "Edit", Handler: cmdDetails},
 		{Name: "retry", Description: "Retry last message", Category: "Edit", Handler: cmdRetry},
-
-		// Project & Files (7 commands)
-		{Name: "files", Description: "List project files", Category: "Project", Handler: cmdFiles},
-		{Name: "grep", Description: "Search in files", Category: "Project", Handler: cmdGrep},
-		{Name: "diff", Description: "Show file differences", Category: "Project", Handler: cmdDiff},
-		{Name: "git", Description: "Git commands", Category: "Project", Handler: cmdGit},
-		{Name: "review", Description: "Review code changes", Category: "Project", Handler: cmdReview},
-		{Name: "editor", Description: "Open in editor", Category: "Project", Handler: cmdEditor},
-		{Name: "init", Description: "Initialize project", Category: "Project", Handler: cmdInit},
-
-		// Model & Provider (5 commands)
-		{Name: "models", Description: "List available models", Category: "Model", Handler: cmdModels},
-		{Name: "model", Description: "Switch current model", Category: "Model", Handler: cmdModel},
-		{Name: "providers", Description: "List all providers", Category: "Model", Handler: cmdProviders},
-		{Name: "connect", Description: "Connect to provider", Category: "Model", Handler: cmdConnect},
-		{Name: "agent", Description: "Switch agent mode", Category: "Model", Handler: cmdAgent},
-
-		// Tools & MCP (4 commands)
-		{Name: "mcps", Description: "Manage MCP servers", Category: "Tools", Handler: cmdMCP},
-		{Name: "tools", Description: "List available tools", Category: "Tools", Handler: cmdTools},
-		{Name: "lsp", Description: "LSP status", Category: "Tools", Handler: cmdLSP},
-		{Name: "agents", Description: "Show all agents", Category: "Tools", Handler: cmdAgents},
-
-		// Context & Memory (4 commands)
-		{Name: "context", Description: "Show current context", Category: "Context", Handler: cmdContext},
-		{Name: "memory", Description: "Show conversation memory", Category: "Context", Handler: cmdMemory},
-		{Name: "add", Description: "Add file to context", Category: "Context", Handler: cmdAdd},
-		{Name: "thinking", Description: "Toggle thinking mode", Category: "Context", Handler: cmdThinking},
-
-		// Auth & Config (8 commands)
-		{Name: "login", Description: "Login to provider", Category: "Auth", Handler: cmdLogin},
-		{Name: "logout", Description: "Logout from provider", Category: "Auth", Handler: cmdLogout},
-		{Name: "auth", Description: "Show auth status", Category: "Auth", Handler: cmdAuth},
-		{Name: "settings", Description: "Show settings", Category: "Auth", Handler: cmdSettings},
-		{Name: "config", Description: "Edit configuration", Category: "Auth", Handler: cmdConfig},
-		{Name: "language", Description: "Set language (en/ko/ja)", Category: "Auth", Handler: cmdLanguage},
-		{Name: "themes", Description: "List themes", Category: "Auth", Handler: cmdTheme},
-		{Name: "theme", Description: "Switch theme", Category: "Auth", Handler: cmdThemeSwitch},
-
-		// System (6 commands)
-		{Name: "status", Description: "Show system status", Category: "System", Handler: cmdStatus},
-		{Name: "setup", Description: "Run initial setup", Category: "System", Handler: cmdSetup},
-		{Name: "doctor", Description: "Run diagnostics", Category: "System", Handler: cmdDoctor},
-		{Name: "version", Description: "Show version", Category: "System", Handler: cmdVersion},
-		{Name: "install", Description: "Install model", Category: "System", Handler: cmdInstall},
-		{Name: "bench", Description: "Run benchmark", Category: "System", Handler: cmdBench},
-
-		// Help (3 commands)
-		{Name: "help", Description: "Show help", Category: "Help", Handler: cmdHelp},
-		{Name: "exit", Description: "Exit DevOrch", Category: "Help", Handler: cmdQuit},
-		{Name: "quit", Description: "Exit DevOrch (alias)", Category: "Help", Handler: cmdQuit},
 	}
 
 	// Load custom commands (OpenCode 스타일)
@@ -263,11 +261,34 @@ func FilterCommands(prefix string) []SlashCommand {
 	prefix = strings.ToLower(prefix)
 
 	var matches []SlashCommand
-	for _, cmd := range GetSlashCommands() {
+	allCommands := GetSlashCommands()
+
+	// If prefix is empty or just "/", return top commands (Quick + Main groups)
+	if prefix == "" {
+		for _, cmd := range allCommands {
+			if cmd.Category == "Quick" || cmd.Category == "Main" {
+				matches = append(matches, cmd)
+			}
+		}
+		// Limit to first 20 for better UX
+		if len(matches) > 20 {
+			matches = matches[:20]
+		}
+		return matches
+	}
+
+	// Filter by prefix
+	for _, cmd := range allCommands {
 		if strings.HasPrefix(strings.ToLower(cmd.Name), prefix) {
 			matches = append(matches, cmd)
 		}
 	}
+
+	// Limit results
+	if len(matches) > 15 {
+		matches = matches[:15]
+	}
+
 	return matches
 }
 
@@ -2194,5 +2215,438 @@ func cmdAgents(m *Model) tea.Cmd {
 func cmdThemeSwitch(m *Model) tea.Cmd {
 	// This is handled by cmdTheme with argument
 	m.mode = ViewModeThemeSelect
+	return nil
+}
+
+// ========== Command Group Handlers (16 core groups) ==========
+
+// cmdSessionGroup handles /session command group
+func cmdSessionGroup(m *Model) tea.Cmd {
+	// Switch to subcommand selection mode
+	m.selectedMainCommand = "session"
+	m.subcommandIdx = 0
+	m.subcommandList = []SubcommandItem{
+		{Name: "new", Description: "Start a new session", Handler: cmdNew},
+		{Name: "list", Description: "Show saved sessions", Handler: cmdSessions},
+		{Name: "save", Description: "Save current session", Handler: cmdSave},
+		{Name: "export", Description: "Export (json/md)", Handler: cmdExport},
+		{Name: "share", Description: "Share session", Handler: cmdShare},
+		{Name: "unshare", Description: "Stop sharing", Handler: cmdUnshare},
+		{Name: "compact", Description: "Compact history", Handler: cmdCompact},
+		{Name: "details", Description: "Show session info", Handler: cmdDetails},
+		{Name: "reset", Description: "Reset completely", Handler: cmdReset},
+		{Name: "undo", Description: "Undo last action", Handler: cmdUndo},
+		{Name: "redo", Description: "Redo last action", Handler: cmdRedo},
+		{Name: "history", Description: "Show chat history", Handler: cmdHistory},
+		{Name: "clear", Description: "Clear chat", Handler: cmdClear},
+	}
+	m.mode = ViewModeSubCommands
+	return nil
+}
+
+// cmdModelGroup handles /model command group
+func cmdModelGroup(m *Model) tea.Cmd {
+	// Switch to subcommand selection mode
+	m.selectedMainCommand = "model"
+	m.subcommandIdx = 0
+	m.subcommandList = []SubcommandItem{
+		{Name: "list", Description: "List available models", Handler: cmdModels},
+		{Name: "set", Description: "Switch to model", Handler: cmdModel},
+		{Name: "install", Description: "Install a model", Handler: cmdInstall},
+		{Name: "bench", Description: "Run benchmark", Handler: cmdBench},
+	}
+	m.mode = ViewModeSubCommands
+	return nil
+}
+
+// cmdProviderGroup handles /provider command group
+func cmdProviderGroup(m *Model) tea.Cmd {
+	m.selectedMainCommand = "provider"
+	m.subcommandIdx = 0
+	m.subcommandList = []SubcommandItem{
+		{Name: "list", Description: "List available providers", Handler: cmdProviders},
+		{Name: "connect", Description: "Connect new provider", Handler: cmdConnect},
+	}
+	m.mode = ViewModeSubCommands
+	return nil
+}
+
+// cmdAgentGroup handles /agent command group
+func cmdAgentGroup(m *Model) tea.Cmd {
+	m.selectedMainCommand = "agent"
+	m.subcommandIdx = 0
+	m.subcommandList = []SubcommandItem{
+		{Name: "list", Description: "List available agents", Handler: cmdAgents},
+		{Name: "set", Description: "Switch to agent", Handler: cmdAgent},
+	}
+	m.mode = ViewModeSubCommands
+	return nil
+}
+
+// cmdCodeGroup handles /code command group
+func cmdCodeGroup(m *Model) tea.Cmd {
+	m.selectedMainCommand = "code"
+	m.subcommandIdx = 0
+	m.subcommandList = []SubcommandItem{
+		{Name: "files", Description: "List project files", Handler: cmdFiles},
+		{Name: "grep", Description: "Search in files", Handler: cmdGrep},
+		{Name: "diff", Description: "Show git diff", Handler: cmdDiff},
+		{Name: "git", Description: "Git operations", Handler: cmdGit},
+		{Name: "review", Description: "Review code changes", Handler: cmdReview},
+		{Name: "editor", Description: "Open in editor", Handler: cmdEditor},
+	}
+	m.mode = ViewModeSubCommands
+	return nil
+}
+
+// cmdContextGroup handles /context command group
+func cmdContextGroup(m *Model) tea.Cmd {
+	m.selectedMainCommand = "context"
+	m.subcommandIdx = 0
+	m.subcommandList = []SubcommandItem{
+		{Name: "show", Description: "Show current context", Handler: cmdContext},
+		{Name: "memory", Description: "Show conversation memory", Handler: cmdMemory},
+		{Name: "add", Description: "Add file to context", Handler: cmdAdd},
+		{Name: "thinking", Description: "Toggle thinking mode", Handler: cmdThinking},
+	}
+	m.mode = ViewModeSubCommands
+	return nil
+}
+
+// cmdToolsGroup handles /tools command group
+func cmdToolsGroup(m *Model) tea.Cmd {
+	m.selectedMainCommand = "tools"
+	m.subcommandIdx = 0
+	m.subcommandList = []SubcommandItem{
+		{Name: "list", Description: "List available tools", Handler: cmdTools},
+		{Name: "mcp", Description: "MCP server management", Handler: cmdMCP},
+		{Name: "lsp", Description: "LSP status", Handler: cmdLSP},
+	}
+	m.mode = ViewModeSubCommands
+	return nil
+}
+
+// cmdConfigGroup handles /config command group
+func cmdConfigGroup(m *Model) tea.Cmd {
+	m.selectedMainCommand = "config"
+	m.subcommandIdx = 0
+	m.subcommandList = []SubcommandItem{
+		{Name: "show", Description: "Show configuration", Handler: cmdSettings},
+		{Name: "themes", Description: "List available themes", Handler: cmdTheme},
+		{Name: "theme", Description: "Change theme", Handler: cmdThemeSwitch},
+		{Name: "lang", Description: "Set language", Handler: cmdLanguage},
+	}
+	m.mode = ViewModeSubCommands
+	return nil
+}
+
+// cmdAuthGroup handles /auth command group
+func cmdAuthGroup(m *Model) tea.Cmd {
+	m.selectedMainCommand = "auth"
+	m.subcommandIdx = 0
+	m.subcommandList = []SubcommandItem{
+		{Name: "status", Description: "Show auth status", Handler: cmdAuth},
+		{Name: "login", Description: "Login to provider", Handler: cmdLogin},
+		{Name: "logout", Description: "Logout from provider", Handler: cmdLogout},
+	}
+	m.mode = ViewModeSubCommands
+	return nil
+}
+
+// cmdSystemGroup handles /system command group
+func cmdSystemGroup(m *Model) tea.Cmd {
+	m.selectedMainCommand = "system"
+	m.subcommandIdx = 0
+	m.subcommandList = []SubcommandItem{
+		{Name: "status", Description: "Show system status", Handler: cmdStatus},
+		{Name: "setup", Description: "Run initial setup", Handler: cmdSetup},
+		{Name: "doctor", Description: "Run diagnostics", Handler: cmdDoctor},
+		{Name: "version", Description: "Show version info", Handler: cmdVersion},
+	}
+	m.mode = ViewModeSubCommands
+	return nil
+}
+
+// cmdHistory shows chat history
+func cmdHistory(m *Model) tea.Cmd {
+	if len(m.messages) == 0 {
+		m.messages = append(m.messages, Message{
+			Role:    "system",
+			Content: "No messages in history",
+		})
+		return nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("📜 Chat History (%d messages)\n\n", len(m.messages)))
+
+	for i, msg := range m.messages {
+		role := msg.Role
+		if role == "user" {
+			role = "You"
+		} else if role == "assistant" {
+			role = "AI"
+		}
+
+		content := msg.Content
+		if len(content) > 100 {
+			content = content[:100] + "..."
+		}
+
+		sb.WriteString(fmt.Sprintf("%d. [%s] %s\n", i+1, role, content))
+	}
+
+	m.messages = append(m.messages, Message{
+		Role:    "system",
+		Content: sb.String(),
+	})
+	return nil
+}
+
+// ============================================================================
+// Phase 2: Work Mode Commands (Ask/Edit/Agent/Plan)
+// ============================================================================
+
+// cmdModeGroup handles /mode command group
+func cmdModeGroup(m *Model) tea.Cmd {
+	m.selectedMainCommand = "mode"
+	m.subcommandIdx = 0
+	m.subcommandList = []SubcommandItem{
+		{Name: "ask", Description: "💬 Quick Q&A mode", Handler: func(m *Model) tea.Cmd {
+			return m.switchWorkMode(WorkModeAsk)
+		}},
+		{Name: "edit", Description: "✏️  Code editing mode", Handler: func(m *Model) tea.Cmd {
+			return m.switchWorkMode(WorkModeEdit)
+		}},
+		{Name: "agent", Description: "🤖 Autonomous agent mode", Handler: func(m *Model) tea.Cmd {
+			return m.switchWorkMode(WorkModeAgent)
+		}},
+		{Name: "plan", Description: "📋 Task planning mode", Handler: func(m *Model) tea.Cmd {
+			return m.switchWorkMode(WorkModePlan)
+		}},
+	}
+	m.mode = ViewModeSubCommands
+	return nil
+}
+
+// cmdMultiModel opens the multi-model selection interface
+func cmdMultiModel(m *Model) tea.Cmd {
+	// Initialize model selections if not already done
+	if len(m.selectedModels) == 0 {
+		m.initializeModelSelections()
+	}
+
+	// Push current view to stack and switch to multi-model select
+	m.PushView(m.mode)
+	m.mode = ViewModeMultiModelSelect
+	m.selectionIdx = 0
+
+	return nil
+}
+
+// cmdPresetGroup handles preset-related subcommands
+func cmdPresetGroup(m *Model) tea.Cmd {
+	if m.presetManager == nil {
+		m.messages = append(m.messages, Message{
+			Role:    "error",
+			Content: "Preset manager not initialized",
+		})
+		return nil
+	}
+
+	// Parse subcommand
+	parts := strings.Fields(m.input.Value())
+	if len(parts) < 2 {
+		// Show preset subcommands
+		m.selectedMainCommand = "preset"
+		m.subcommandIdx = 0
+		m.subcommandList = []SubcommandItem{
+			{Name: "list", Description: "List all available presets", Handler: cmdPresetList},
+			{Name: "load", Description: "Load a preset", Handler: cmdPresetLoad},
+			{Name: "save", Description: "Save current selection as preset", Handler: cmdPresetSave},
+			{Name: "delete", Description: "Delete a preset", Handler: cmdPresetDelete},
+		}
+		m.mode = ViewModeSubCommands
+		return nil
+	}
+
+	subCmd := parts[1]
+	switch subCmd {
+	case "list":
+		return cmdPresetList(m)
+	case "load":
+		return cmdPresetLoad(m)
+	case "save":
+		return cmdPresetSave(m)
+	case "delete":
+		return cmdPresetDelete(m)
+	default:
+		m.messages = append(m.messages, Message{
+			Role:    "error",
+			Content: fmt.Sprintf("Unknown preset subcommand: %s", subCmd),
+		})
+		return nil
+	}
+}
+
+// cmdPresetList lists all available presets
+func cmdPresetList(m *Model) tea.Cmd {
+	if m.presetManager == nil {
+		m.messages = append(m.messages, Message{
+			Role:    "error",
+			Content: "Preset manager not initialized",
+		})
+		return nil
+	}
+
+	presets := m.presetManager.ListPresets()
+
+	var output strings.Builder
+	output.WriteString("📋 Available Model Presets:\n\n")
+
+	if len(presets) == 0 {
+		output.WriteString("No presets saved yet.\n")
+	} else {
+		for _, preset := range presets {
+			output.WriteString(fmt.Sprintf("• %s\n", preset.Name))
+			if preset.Description != "" {
+				output.WriteString(fmt.Sprintf("  %s\n", preset.Description))
+			}
+			output.WriteString(fmt.Sprintf("  Models: %d | Used: %d times\n", len(preset.Models), preset.UsageCount))
+			output.WriteString("\n")
+		}
+	}
+
+	m.messages = append(m.messages, Message{Role: "system", Content: output.String()})
+	return nil
+}
+
+// cmdPresetLoad loads a preset
+func cmdPresetLoad(m *Model) tea.Cmd {
+	if m.presetManager == nil {
+		m.messages = append(m.messages, Message{
+			Role:    "error",
+			Content: "Preset manager not initialized",
+		})
+		return nil
+	}
+
+	parts := strings.Fields(m.input.Value())
+	if len(parts) < 3 {
+		m.messages = append(m.messages, Message{
+			Role:    "error",
+			Content: "Usage: /preset load <name>",
+		})
+		return nil
+	}
+
+	presetName := parts[2]
+	preset, err := m.presetManager.LoadPreset(presetName)
+	if err != nil {
+		m.messages = append(m.messages, Message{
+			Role:    "error",
+			Content: fmt.Sprintf("Failed to load preset: %v", err),
+		})
+		return nil
+	}
+
+	// Apply preset to model
+	m.ApplyPreset(preset)
+
+	m.messages = append(m.messages, Message{
+		Role:    "system",
+		Content: fmt.Sprintf("✓ Loaded preset '%s' with %d models", preset.Name, len(preset.Models)),
+	})
+	return nil
+}
+
+// cmdPresetSave saves current selection as a preset
+func cmdPresetSave(m *Model) tea.Cmd {
+	if m.presetManager == nil {
+		m.messages = append(m.messages, Message{
+			Role:    "error",
+			Content: "Preset manager not initialized",
+		})
+		return nil
+	}
+
+	parts := strings.Fields(m.input.Value())
+	if len(parts) < 3 {
+		m.messages = append(m.messages, Message{
+			Role:    "error",
+			Content: "Usage: /preset save <name> [description]",
+		})
+		return nil
+	}
+
+	presetName := parts[2]
+	description := ""
+	if len(parts) > 3 {
+		description = strings.Join(parts[3:], " ")
+	}
+
+	// Get currently selected models
+	var selectedModels []ModelSelection
+	for _, ms := range m.selectedModels {
+		if ms.Selected {
+			selectedModels = append(selectedModels, ms)
+		}
+	}
+
+	if len(selectedModels) == 0 {
+		m.messages = append(m.messages, Message{
+			Role:    "error",
+			Content: "No models selected. Please select models first using /multimodel",
+		})
+		return nil
+	}
+
+	if err := m.presetManager.SavePreset(presetName, description, selectedModels); err != nil {
+		m.messages = append(m.messages, Message{
+			Role:    "error",
+			Content: fmt.Sprintf("Failed to save preset: %v", err),
+		})
+		return nil
+	}
+
+	m.messages = append(m.messages, Message{
+		Role:    "system",
+		Content: fmt.Sprintf("✓ Saved preset '%s' with %d models", presetName, len(selectedModels)),
+	})
+	return nil
+}
+
+// cmdPresetDelete deletes a preset
+func cmdPresetDelete(m *Model) tea.Cmd {
+	if m.presetManager == nil {
+		m.messages = append(m.messages, Message{
+			Role:    "error",
+			Content: "Preset manager not initialized",
+		})
+		return nil
+	}
+
+	parts := strings.Fields(m.input.Value())
+	if len(parts) < 3 {
+		m.messages = append(m.messages, Message{
+			Role:    "error",
+			Content: "Usage: /preset delete <name>",
+		})
+		return nil
+	}
+
+	presetName := parts[2]
+	if err := m.presetManager.DeletePreset(presetName); err != nil {
+		m.messages = append(m.messages, Message{
+			Role:    "error",
+			Content: fmt.Sprintf("Failed to delete preset: %v", err),
+		})
+		return nil
+	}
+
+	m.messages = append(m.messages, Message{
+		Role:    "system",
+		Content: fmt.Sprintf("✓ Deleted preset '%s'", presetName),
+	})
 	return nil
 }

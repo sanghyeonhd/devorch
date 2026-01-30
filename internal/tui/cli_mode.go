@@ -42,6 +42,12 @@ func NewCLIMode() *CLIMode {
 	}
 }
 
+// RunCLI is a convenience function to run CLI mode
+func RunCLI() error {
+	cli := NewCLIMode()
+	return cli.Run()
+}
+
 // Run starts the CLI mode REPL
 func (c *CLIMode) Run() error {
 	c.printWelcome()
@@ -62,6 +68,12 @@ func (c *CLIMode) Run() error {
 
 		// Handle commands
 		if strings.HasPrefix(input, "/") {
+			// Special case: "/" alone shows interactive command selector
+			if input == "/" {
+				c.showInteractiveCommandSelector()
+				continue
+			}
+
 			if c.handleCommand(input) {
 				continue
 			}
@@ -347,8 +359,19 @@ func (c *CLIMode) handleCommand(input string) bool {
 		c.runSetup()
 
 	default:
+		// Try to suggest similar commands
+		suggestions := c.findSimilarCommands(cmdName)
 		fmt.Printf("%s Unknown command: /%s\n", c.theme.Warning.Render("⚠"), cmdName)
-		fmt.Println("  Type /help for available commands")
+
+		if len(suggestions) > 0 {
+			fmt.Println(c.theme.Subtle.Render("  Did you mean:"))
+			for _, s := range suggestions {
+				fmt.Printf("    %s\n", c.theme.Accent.Render("/"+s))
+			}
+		} else {
+			fmt.Println(c.theme.Subtle.Render("  Type / to see all commands"))
+			fmt.Println(c.theme.Subtle.Render("  Type /help for detailed help"))
+		}
 	}
 
 	return true
@@ -1765,21 +1788,13 @@ func (c *CLIMode) showMCPs() {
 	if len(servers) == 0 {
 		fmt.Println(c.theme.Subtle.Render("  No external MCP servers configured"))
 	} else {
-		ctx := context.Background()
 		for name, cfg := range servers {
 			status := c.theme.Warning.Render("○")
-			statusText := "not connected"
+			statusText := "disabled"
 
-			// Try to connect and get tools
 			if cfg.Enabled {
-				client, err := mcpManager.GetClient(ctx, name)
-				if err == nil && client != nil {
-					tools, _ := client.ListTools(ctx)
-					status = c.theme.Success.Render("●")
-					statusText = fmt.Sprintf("%d tools", len(tools))
-				}
-			} else {
-				statusText = "disabled"
+				status = c.theme.Success.Render("●")
+				statusText = "enabled (not connected)"
 			}
 
 			fmt.Printf("  %s %s  %s\n", status, c.theme.Accent.Render(name), c.theme.Subtle.Render(statusText))
@@ -3043,8 +3058,135 @@ func (c *CLIMode) runSetup() {
 	fmt.Println()
 }
 
-// RunCLI starts DevOrch in CLI mode
-func RunCLI() error {
-	cli := NewCLIMode()
-	return cli.Run()
+// showInteractiveCommandSelector shows an interactive command selector
+func (c *CLIMode) showInteractiveCommandSelector() {
+	fmt.Println()
+	fmt.Println(c.theme.Title.Render("  📚 Available Commands  "))
+	fmt.Println(c.theme.Border.Render("════════════════════════════════════════════════════════"))
+	fmt.Println()
+
+	// Group commands by category
+	categories := []struct {
+		title    string
+		commands []struct {
+			name string
+			desc string
+		}
+	}{
+		{
+			title: "⌨️  Quick Commands",
+			commands: []struct{ name, desc string }{
+				{"/help", "Show this help"},
+				{"/exit", "Exit DevOrch"},
+				{"/clear", "Clear chat"},
+				{"/new", "New session"},
+				{"/init", "Initialize project"},
+				{"/history", "Show chat history"},
+			},
+		},
+		{
+			title: "🎯 Main Command Groups",
+			commands: []struct{ name, desc string }{
+				{"/session", "Session management (new, list, save, export...)"},
+				{"/model", "Model management (list, set, install, bench)"},
+				{"/provider", "Provider management (list, connect, disconnect)"},
+				{"/agent", "Agent management (list, set)"},
+				{"/code", "Code/file operations (files, grep, diff, review)"},
+				{"/context", "Context management (add, memory, thinking)"},
+				{"/tools", "Tool management (mcp, lsp)"},
+				{"/config", "Configuration (theme, lang, edit)"},
+				{"/auth", "Authentication (login, logout, status)"},
+				{"/system", "System (status, setup, doctor, version)"},
+			},
+		},
+	}
+
+	for _, cat := range categories {
+		fmt.Println(c.theme.Accent.Render(cat.title))
+		for _, cmd := range cat.commands {
+			fmt.Printf("   %-20s %s\n", c.theme.Success.Render(cmd.name), cmd.desc)
+		}
+		fmt.Println()
+	}
+
+	fmt.Println(c.theme.Border.Render("────────────────────────────────────────────────────────"))
+	fmt.Println(c.theme.Subtle.Render("Type a command directly (e.g., /help) or command name for details"))
+	fmt.Println(c.theme.Subtle.Render("Example: /model list, /code grep TODO, /session save"))
+	fmt.Println()
+}
+
+// findSimilarCommands finds commands similar to the given input
+func (c *CLIMode) findSimilarCommands(input string) []string {
+	input = strings.ToLower(input)
+
+	// List of all valid commands
+	allCommands := []string{
+		// Quick commands
+		"help", "exit", "quit", "clear", "new", "history", "init",
+		// Main groups
+		"session", "model", "provider", "agent", "code", "context", "tools", "config", "auth", "system",
+		// Legacy (common)
+		"models", "themes", "status", "agents", "sessions", "files", "grep", "diff",
+		"doctor", "version", "install", "bench", "connect", "login", "logout",
+	}
+
+	var suggestions []string
+
+	// Find commands that start with input
+	for _, cmd := range allCommands {
+		if strings.HasPrefix(cmd, input) {
+			suggestions = append(suggestions, cmd)
+		}
+	}
+
+	// If no prefix matches, find commands that contain input
+	if len(suggestions) == 0 {
+		for _, cmd := range allCommands {
+			if strings.Contains(cmd, input) {
+				suggestions = append(suggestions, cmd)
+			}
+		}
+	}
+
+	// If still no matches, use Levenshtein-like fuzzy matching
+	if len(suggestions) == 0 {
+		for _, cmd := range allCommands {
+			if c.fuzzyMatch(input, cmd) {
+				suggestions = append(suggestions, cmd)
+			}
+		}
+	}
+
+	// Limit to 5 suggestions
+	if len(suggestions) > 5 {
+		suggestions = suggestions[:5]
+	}
+
+	return suggestions
+}
+
+// fuzzyMatch returns true if input is similar to target (simple similarity check)
+func (c *CLIMode) fuzzyMatch(input, target string) bool {
+	// If input and target share at least 60% of characters, it's a match
+	if len(input) == 0 || len(target) == 0 {
+		return false
+	}
+
+	// Count matching characters
+	matches := 0
+	targetMap := make(map[rune]int)
+	for _, ch := range target {
+		targetMap[ch]++
+	}
+
+	for _, ch := range input {
+		if targetMap[ch] > 0 {
+			matches++
+			targetMap[ch]--
+		}
+	}
+
+	// Calculate similarity percentage
+	similarity := float64(matches) / float64(len(input))
+	return similarity >= 0.6
 }

@@ -2,6 +2,7 @@
 package tui
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -53,18 +54,65 @@ const (
 	ViewModeSessions
 	ViewModeSettings
 	ViewModeHelp
-	ViewModeCommands       // Slash command palette
-	ViewModeModelSelect    // Model selection
-	ViewModeProviderSelect // Provider selection
-	ViewModeThemeSelect    // Theme selection
-	ViewModeLogin          // OAuth login
-	ViewModeMCP            // MCP server management
-	ViewModeSetup          // Auto setup wizard
-	ViewModeAgentSelect    // Agent mode selection
-	ViewModeInstallSelect  // Model installation selection
-	ViewModeLanguageSelect // Language selection
-	ViewModeConnect        // OpenCode-style provider connect
+	ViewModeCommands         // Slash command palette (main command groups)
+	ViewModeSubCommands      // Subcommand selection
+	ViewModeModelSelect      // Model selection
+	ViewModeProviderSelect   // Provider selection
+	ViewModeThemeSelect      // Theme selection
+	ViewModeLogin            // OAuth login
+	ViewModeMCP              // MCP server management
+	ViewModeSetup            // Auto setup wizard
+	ViewModeAgentSelect      // Agent mode selection
+	ViewModeInstallSelect    // Model installation selection
+	ViewModeLanguageSelect   // Language selection
+	ViewModeConnect          // OpenCode-style provider connect
+	ViewModeConfirm          // Confirmation dialog
+	ViewModeProgress         // Progress indicator
+	ViewModeMultiModelSelect // Multi-model selection (Phase 3)
+	ViewModeCompare          // Multi-model response comparison (Phase 3)
 )
+
+// WorkMode represents the work/task mode (Phase 2)
+type WorkMode int
+
+const (
+	WorkModeAsk   WorkMode = iota // Quick Q&A mode
+	WorkModeEdit                  // Code editing mode
+	WorkModeAgent                 // Autonomous agent mode
+	WorkModePlan                  // Task planning mode
+)
+
+// String returns the string representation of WorkMode
+func (w WorkMode) String() string {
+	switch w {
+	case WorkModeAsk:
+		return "Ask"
+	case WorkModeEdit:
+		return "Edit"
+	case WorkModeAgent:
+		return "Agent"
+	case WorkModePlan:
+		return "Plan"
+	default:
+		return "Ask"
+	}
+}
+
+// Icon returns the emoji icon for the work mode
+func (w WorkMode) Icon() string {
+	switch w {
+	case WorkModeAsk:
+		return "💬"
+	case WorkModeEdit:
+		return "✏️"
+	case WorkModeAgent:
+		return "🤖"
+	case WorkModePlan:
+		return "📋"
+	default:
+		return "💬"
+	}
+}
 
 // Model represents the main TUI application state.
 type Model struct {
@@ -102,6 +150,11 @@ type Model struct {
 	commandSelectedIdx      int
 	filteredCommands        []SlashCommand
 
+	// Subcommand selection
+	selectedMainCommand string           // e.g., "session", "model"
+	subcommandList      []SubcommandItem // List of subcommands to choose from
+	subcommandIdx       int              // Selected index in subcommand list
+
 	// Selection lists (for models, themes, providers)
 	selectionList      []string
 	selectionIdx       int
@@ -122,6 +175,47 @@ type Model struct {
 	showDetails  bool // Show token count, timing, model info
 	thinkingMode bool // Extended thinking for supported models
 
+	// Navigation stack for back button (Phase 1)
+	viewStack []ViewMode
+	viewData  map[ViewMode]interface{} // Store state for each view
+
+	// Confirm dialog (Phase 1)
+	confirmTitle    string
+	confirmMessage  string
+	confirmYes      string // Default: "Yes"
+	confirmNo       string // Default: "No"
+	confirmSelected int    // 0 = Yes, 1 = No
+	confirmCallback func(bool) tea.Cmd
+
+	// Progress indicator (Phase 1)
+	progressTitle   string
+	progressPercent float64
+	progressBytes   int64
+	progressTotal   int64
+	progressSpeed   string
+	progressETA     string
+	progressStatus  string // Additional status text
+	progressErr     error
+
+	// Work mode system (Phase 2)
+	workMode         WorkMode          // Current work mode (Ask/Edit/Agent/Plan)
+	workModeContext  map[string]string // Mode-specific context data
+	editContextFiles []string          // Files in context for Edit mode
+	agentSteps       []AgentStep       // Steps for Agent mode
+	agentCurrentStep int               // Current step in Agent mode
+	planAnalysis     *TaskAnalysis     // Analysis for Plan mode
+
+	// Multi-model system (Phase 3)
+	multiModelEnabled bool                      // Enable multi-model mode
+	selectedModels    []ModelSelection          // Selected models for multi-model
+	modelResponses    map[string]*ModelResponse // Responses from each model
+	showCompareView   bool                      // Show side-by-side comparison
+	compareScrollIdx  int                       // Scroll index for compare view
+	modelRatings      map[string]ResponseRating // User ratings for responses
+
+	// Preset system (Phase 4)
+	presetManager *PresetManager // Preset manager
+
 	// Theme
 	theme Theme
 }
@@ -141,6 +235,145 @@ type SessionInfo struct {
 	Messages  int
 }
 
+// SubcommandItem represents a subcommand option
+type SubcommandItem struct {
+	Name        string
+	Description string
+	Handler     func(m *Model) tea.Cmd
+}
+
+// AgentStep represents a step in agent execution (Phase 2)
+type AgentStep struct {
+	Number      int
+	Description string
+	Tool        string
+	Args        map[string]interface{}
+	Status      StepStatus
+	Result      string
+	Error       error
+}
+
+// StepStatus represents the status of an agent step
+type StepStatus int
+
+const (
+	StepPending StepStatus = iota
+	StepRunning
+	StepComplete
+	StepFailed
+)
+
+// String returns the string representation of StepStatus
+func (s StepStatus) String() string {
+	switch s {
+	case StepPending:
+		return "⋯"
+	case StepRunning:
+		return "⏳"
+	case StepComplete:
+		return "✓"
+	case StepFailed:
+		return "✗"
+	default:
+		return "⋯"
+	}
+}
+
+// TaskAnalysis represents task analysis for Plan mode (Phase 2)
+type TaskAnalysis struct {
+	Goal          string
+	Steps         []PlannedStep
+	EstimatedTime int // in minutes
+	Risks         []Risk
+	Dependencies  []string
+	FilesAffected []string
+}
+
+// PlannedStep represents a planned step in task analysis
+type PlannedStep struct {
+	Number      int
+	Description string
+	Estimated   int // in minutes
+	Risk        RiskLevel
+	Files       []string
+}
+
+// Risk represents a potential risk in task execution
+type Risk struct {
+	Level       RiskLevel
+	Description string
+	Mitigation  string
+}
+
+// RiskLevel represents the risk level
+type RiskLevel int
+
+const (
+	RiskLow RiskLevel = iota
+	RiskMedium
+	RiskHigh
+)
+
+// String returns the string representation of RiskLevel
+func (r RiskLevel) String() string {
+	switch r {
+	case RiskLow:
+		return "Low"
+	case RiskMedium:
+		return "Medium"
+	case RiskHigh:
+		return "High"
+	default:
+		return "Low"
+	}
+}
+
+// Color returns the color for the risk level
+func (r RiskLevel) Color() string {
+	switch r {
+	case RiskLow:
+		return "green"
+	case RiskMedium:
+		return "yellow"
+	case RiskHigh:
+		return "red"
+	default:
+		return "white"
+	}
+}
+
+// ================== Phase 3: Multi-Model Types ==================
+
+// ModelSelection represents a selected model for multi-model mode
+type ModelSelection struct {
+	Provider    string
+	Model       string
+	DisplayName string
+	Selected    bool
+}
+
+// ModelResponse represents a response from a model in multi-model mode
+type ModelResponse struct {
+	Provider    string
+	Model       string
+	DisplayName string
+	Content     string
+	Tokens      int
+	Duration    int64 // in milliseconds
+	Error       error
+	InProgress  bool
+	StartTime   time.Time
+}
+
+// ResponseRating represents user rating for a model response
+type ResponseRating struct {
+	ModelKey string // "provider:model"
+	Rating   int    // 1 = thumbs down, 2 = thumbs up, 0 = no rating
+	Comment  string
+}
+
+// ================== End Phase 3 Types ==================
+
 // New creates a new TUI model.
 func New() Model {
 	ti := textinput.New()
@@ -155,14 +388,37 @@ func New() Model {
 
 	theme := DefaultTheme()
 
+	// Initialize preset manager
+	presetManager, err := NewPresetManager()
+	if err != nil {
+		// Non-fatal, continue without preset functionality
+		presetManager = nil
+	}
+
 	return Model{
-		mode:           ViewModeChat,
-		input:          ti,
-		spinner:        sp,
-		theme:          theme,
-		commandPalette: NewCommandPalette(theme),
+		mode:              ViewModeChat,
+		input:             ti,
+		spinner:           sp,
+		theme:             theme,
+		commandPalette:    NewCommandPalette(theme),
+		viewStack:         []ViewMode{},
+		viewData:          make(map[ViewMode]interface{}),
+		confirmYes:        "Yes",
+		confirmNo:         "No",
+		confirmSelected:   0,
+		workMode:          WorkModeAsk, // Default to Ask mode
+		workModeContext:   make(map[string]string),
+		editContextFiles:  []string{},
+		agentSteps:        []AgentStep{},
+		multiModelEnabled: false,
+		selectedModels:    []ModelSelection{},
+		modelResponses:    make(map[string]*ModelResponse),
+		showCompareView:   false,
+		compareScrollIdx:  0,
+		modelRatings:      make(map[string]ResponseRating),
+		presetManager:     presetManager,
 		messages: []Message{
-			{Role: "system", Content: "Welcome to DevOrch! Type / for commands or start chatting."},
+			{Role: "system", Content: "Welcome to DevOrch! Type / for commands or start chatting.\n\n💬 Mode: Ask - Quick questions and answers"},
 		},
 	}
 }
@@ -226,6 +482,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case StreamDoneMsg:
 		m.isStreaming = false
+
+		// If in Agent mode, check if we should parse and execute steps
+		if m.workMode == WorkModeAgent && len(m.messages) > 0 {
+			lastMsg := m.messages[len(m.messages)-1]
+			if lastMsg.Role == "assistant" {
+				// Parse steps from response and offer to execute
+				cmd = m.agentExecuteSteps(lastMsg.Content)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+		}
+
 		m.viewport.SetContent(m.renderMessages())
 		m.viewport.GotoBottom()
 
@@ -245,6 +514,65 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case SessionMessagesLoadedMsg:
 		m.messages = msg.Messages
+
+	case *ModelInstallStartMsg:
+		// Start installation in background
+		return m, m.startModelInstallation(msg.Provider, msg.ModelID)
+
+	case *ModelInstallProgressMsg:
+		// Update progress indicator
+		m.UpdateProgress(msg.Percent, msg.Bytes, msg.Total, msg.Speed, msg.ETA, msg.Status)
+		return m, nil
+
+	case *ModelInstallCompleteMsg:
+		if msg.Success {
+			// Installation successful
+			m.CloseProgress()
+			active := GetActiveProvider()
+			SetActiveProvider(active.Provider, msg.ModelID)
+			m.messages = append(m.messages, Message{
+				Role:    "system",
+				Content: fmt.Sprintf("✅ Model '%s' installed successfully!\n\nYou can now use it for your tasks.", msg.ModelID),
+			})
+			m.mode = ViewModeChat
+		} else {
+			// Installation failed
+			m.SetProgressError(msg.Error)
+		}
+		return m, nil
+
+	case ModelResponseMsg:
+		// Handle multi-model response
+		m.handleModelResponse(msg)
+		return m, nil
+
+	case AgentExecutionStartMsg:
+		// Agent execution started
+		m.messages = append(m.messages, Message{
+			Role:    "system",
+			Content: fmt.Sprintf("🤖 Starting agent execution: %d steps", msg.TotalSteps),
+		})
+		m.viewport.SetContent(m.renderMessages())
+		m.viewport.GotoBottom()
+		return m, nil
+
+	case AgentStepCompleteMsg:
+		// Update step status
+		if msg.StepNumber > 0 && msg.StepNumber <= len(m.agentSteps) {
+			step := &m.agentSteps[msg.StepNumber-1]
+			if msg.Error != nil {
+				step.Status = StepFailed
+				step.Error = msg.Error
+			} else {
+				step.Status = StepComplete
+				step.Result = msg.Result
+			}
+
+			// Update display
+			m.viewport.SetContent(m.renderMessages())
+			m.viewport.GotoBottom()
+		}
+		return m, nil
 	}
 
 	// Update input
@@ -266,17 +594,33 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 	case ViewModeCommands:
 		return m.handleCommandPaletteKey(msg)
+	case ViewModeSubCommands:
+		return m.handleSubCommandKey(msg)
 	case ViewModeThemeSelect, ViewModeModelSelect, ViewModeProviderSelect, ViewModeLogin, ViewModeAgentSelect, ViewModeLanguageSelect:
 		return m.handleSelectionKey(msg)
 	case ViewModeInstallSelect:
 		return m.handleInstallSelectionKey(msg)
 	case ViewModeConnect:
 		return m.handleConnectKey(msg)
+	case ViewModeConfirm:
+		return m.handleConfirmKey(msg)
+	case ViewModeProgress:
+		return m.handleProgressKey(msg)
+	case ViewModeMultiModelSelect:
+		return m.handleMultiModelSelectKey(msg)
+	case ViewModeCompare:
+		return m.handleCompareKey(msg)
 	}
 
 	// Handle interactive command autocomplete
 	if m.showCommandAutocomplete {
 		return m.handleCommandAutocompleteKey(msg)
+	}
+
+	// Global Esc handler for navigation stack
+	if msg.String() == "esc" && len(m.viewStack) > 0 {
+		m.PopView()
+		return m, nil
 	}
 
 	switch msg.String() {
@@ -293,7 +637,7 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.mode == ViewModeSessions {
 			m.mode = ViewModeChat
 		} else {
-			m.mode = ViewModeSessions
+			m.mode = ViewModeChat
 		}
 		return m, nil
 
@@ -310,6 +654,22 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Open command palette
 		m.mode = ViewModeCommands
 		return m, nil
+
+	case "ctrl+1":
+		// Switch to Ask mode
+		return m, m.switchWorkMode(WorkModeAsk)
+
+	case "ctrl+2":
+		// Switch to Edit mode
+		return m, m.switchWorkMode(WorkModeEdit)
+
+	case "ctrl+3":
+		// Switch to Agent mode
+		return m, m.switchWorkMode(WorkModeAgent)
+
+	case "ctrl+4":
+		// Switch to Plan mode
+		return m, m.switchWorkMode(WorkModePlan)
 
 	case "tab":
 		// Autocomplete slash command (when preview is showing)
@@ -512,11 +872,32 @@ func (m Model) handleSelectionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				modelID := strings.TrimSuffix(selected, " ✓")
 				modelID = strings.TrimSpace(modelID)
 				active := GetActiveProvider()
+
+				// Phase 1: Check if model is installed
+				if !isModelInstalled(active.Provider, modelID) {
+					// Show confirmation dialog for installation
+					m.ShowConfirm(
+						"Install Model?",
+						fmt.Sprintf("Model '%s' is not installed.\n\nWould you like to download and install it now?", modelID),
+						func(confirmed bool) tea.Cmd {
+							if confirmed {
+								return m.installModelWithProgress(active.Provider, modelID)
+							}
+							// User declined, go back to model selection
+							m.mode = ViewModeModelSelect
+							return nil
+						},
+					)
+					return m, nil
+				}
+
+				// Model is already installed, just set it
 				SetActiveProvider(active.Provider, modelID)
 				m.messages = append(m.messages, Message{
 					Role:    "system",
 					Content: fmt.Sprintf("Model changed to: %s\nProvider: %s", modelID, active.Provider),
 				})
+				m.mode = ViewModeChat
 			case ViewModeProviderSelect:
 				// Extract provider name
 				providers := GetAvailableProviders()
@@ -638,7 +1019,7 @@ func (m Model) sendMessage() (tea.Model, tea.Cmd) {
 		return m.handleCommand(text)
 	}
 
-	// Add user message
+	// Add user message (original text)
 	m.messages = append(m.messages, Message{
 		Role:    "user",
 		Content: text,
@@ -649,8 +1030,18 @@ func (m Model) sendMessage() (tea.Model, tea.Cmd) {
 	m.viewport.SetContent(m.renderMessages())
 	m.viewport.GotoBottom()
 
-	// Return command to send message to LLM
-	return m, m.sendToLLM(text)
+	// Build mode-specific prompt
+	enhancedPrompt := m.buildPromptForMode(text)
+
+	// Check if multi-model mode is enabled
+	if m.multiModelEnabled {
+		// Switch to compare view
+		m.mode = ViewModeCompare
+		return m, m.sendToMultipleModels(enhancedPrompt)
+	}
+
+	// Return command to send message to LLM (single model)
+	return m, m.sendToLLM(enhancedPrompt)
 }
 
 // handleCommand processes slash commands.
@@ -704,6 +1095,8 @@ func (m Model) View() string {
 		return m.viewHelp()
 	case ViewModeCommands:
 		return m.viewCommandPalette()
+	case ViewModeSubCommands:
+		return m.viewSubCommands()
 	case ViewModeThemeSelect, ViewModeModelSelect, ViewModeProviderSelect, ViewModeLogin, ViewModeAgentSelect, ViewModeLanguageSelect:
 		return m.viewSelectionList()
 	case ViewModeInstallSelect:
@@ -716,6 +1109,14 @@ func (m Model) View() string {
 		return m.viewSetup()
 	case ViewModeMCP:
 		return m.viewMCP()
+	case ViewModeConfirm:
+		return m.viewConfirm()
+	case ViewModeProgress:
+		return m.viewProgress()
+	case ViewModeMultiModelSelect:
+		return m.viewMultiModelSelect()
+	case ViewModeCompare:
+		return m.viewCompare()
 	default:
 		return m.viewChat()
 	}
@@ -1109,9 +1510,14 @@ func (m Model) renderHeader() string {
 		title += " - " + m.sessionName
 	}
 
+	// Add work mode indicator
+	modeIndicator := fmt.Sprintf("%s %s", m.workMode.Icon(), m.workMode.String())
+
 	status := ""
 	if m.isStreaming {
 		status = m.spinner.View() + " Thinking..."
+	} else {
+		status = modeIndicator
 	}
 
 	left := m.theme.Title.Render(title)
@@ -1141,6 +1547,12 @@ func (m Model) renderMessages() string {
 		b.WriteString("\n\n")
 	}
 
+	// Show agent execution progress if in Agent mode and steps are active
+	if m.workMode == WorkModeAgent && len(m.agentSteps) > 0 {
+		b.WriteString(m.renderAgentProgress())
+		b.WriteString("\n\n")
+	}
+
 	return b.String()
 }
 
@@ -1151,7 +1563,7 @@ func (m Model) renderInput() string {
 
 // renderFooter renders the footer bar.
 func (m Model) renderFooter() string {
-	shortcuts := "Ctrl+N: New | Ctrl+S: Sessions | Ctrl+H: Help | Ctrl+C: Quit"
+	shortcuts := "Ctrl+N: New | Ctrl+S: Sessions | Ctrl+H: Help | Ctrl+1/2/3/4: Mode | Ctrl+C: Quit"
 
 	// Debug info (temporary)
 	debug := fmt.Sprintf(" | mode=%d ac=%v sel=%d", m.mode, m.showCommandAutocomplete, len(m.selectionList))
@@ -1909,6 +2321,66 @@ func (m Model) handleConnectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+// handleSubCommandKey handles key events in subcommand selection mode
+func (m Model) handleSubCommandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k":
+		if m.subcommandIdx > 0 {
+			m.subcommandIdx--
+		}
+		return m, nil
+
+	case "down", "j":
+		if m.subcommandIdx < len(m.subcommandList)-1 {
+			m.subcommandIdx++
+		}
+		return m, nil
+
+	case "enter":
+		if m.subcommandIdx < len(m.subcommandList) {
+			selected := m.subcommandList[m.subcommandIdx]
+			m.mode = ViewModeChat
+			return m, selected.Handler(&m)
+		}
+		return m, nil
+
+	case "esc", "q":
+		m.mode = ViewModeChat
+		return m, nil
+	}
+
+	return m, nil
+}
+
+// viewSubCommands renders the subcommand selection view
+func (m Model) viewSubCommands() string {
+	var b strings.Builder
+
+	title := m.theme.Title.Render(fmt.Sprintf("📋 /%s Commands", m.selectedMainCommand))
+	b.WriteString(title + "\n\n")
+
+	if len(m.subcommandList) == 0 {
+		b.WriteString(m.theme.Subtle.Render("No subcommands available."))
+	} else {
+		for i, sub := range m.subcommandList {
+			cursor := "  "
+			style := m.theme.Normal
+			if i == m.subcommandIdx {
+				cursor = "▶ "
+				style = m.theme.Selected
+			}
+
+			line := fmt.Sprintf("%s%-20s %s", cursor, sub.Name, sub.Description)
+			b.WriteString(style.Render(line) + "\n")
+		}
+	}
+
+	b.WriteString("\n" + m.theme.Border.Render(strings.Repeat("─", m.width-4)) + "\n")
+	b.WriteString(m.theme.Subtle.Render("↑/↓: Navigate | Enter: Select | Esc: Back"))
+
+	return b.String()
+}
+
 // OpenBrowser opens a URL in the default browser
 func OpenBrowser(url string) error {
 	var cmd *exec.Cmd
@@ -1923,4 +2395,864 @@ func OpenBrowser(url string) error {
 		return fmt.Errorf("unsupported platform")
 	}
 	return cmd.Start()
+}
+
+// ============================================================================
+// Phase 1: Navigation Stack Functions
+// ============================================================================
+
+// PushView pushes current view to stack and switches to new view
+func (m *Model) PushView(newMode ViewMode) {
+	m.viewStack = append(m.viewStack, m.mode)
+	m.mode = newMode
+}
+
+// PopView returns to previous view from stack
+func (m *Model) PopView() bool {
+	if len(m.viewStack) == 0 {
+		return false
+	}
+	m.mode = m.viewStack[len(m.viewStack)-1]
+	m.viewStack = m.viewStack[:len(m.viewStack)-1]
+	return true
+}
+
+// ClearViewStack clears the navigation stack
+func (m *Model) ClearViewStack() {
+	m.viewStack = []ViewMode{}
+}
+
+// ============================================================================
+// Phase 1: Confirm Dialog
+// ============================================================================
+
+// ShowConfirm displays a confirmation dialog
+func (m *Model) ShowConfirm(title, message string, callback func(bool) tea.Cmd) {
+	m.PushView(ViewModeConfirm)
+	m.confirmTitle = title
+	m.confirmMessage = message
+	m.confirmCallback = callback
+	m.confirmSelected = 0
+	m.confirmYes = "Yes"
+	m.confirmNo = "No"
+}
+
+// ShowConfirmCustom displays a confirmation dialog with custom button labels
+func (m *Model) ShowConfirmCustom(title, message, yesLabel, noLabel string, callback func(bool) tea.Cmd) {
+	m.PushView(ViewModeConfirm)
+	m.confirmTitle = title
+	m.confirmMessage = message
+	m.confirmCallback = callback
+	m.confirmSelected = 0
+	m.confirmYes = yesLabel
+	m.confirmNo = noLabel
+}
+
+// viewConfirm renders the confirmation dialog
+func (m Model) viewConfirm() string {
+	var b strings.Builder
+
+	// Title
+	title := m.theme.Title.Render(m.confirmTitle)
+	b.WriteString(title + "\n\n")
+
+	// Message
+	message := m.theme.Normal.Render(m.confirmMessage)
+	b.WriteString(message + "\n\n")
+
+	// Buttons
+	yesStyle := m.theme.Normal
+	noStyle := m.theme.Normal
+
+	if m.confirmSelected == 0 {
+		yesStyle = m.theme.Accent.Bold(true)
+	} else {
+		noStyle = m.theme.Accent.Bold(true)
+	}
+
+	yesButton := yesStyle.Render(fmt.Sprintf("[ %s ]", m.confirmYes))
+	noButton := noStyle.Render(fmt.Sprintf("[ %s ]", m.confirmNo))
+
+	buttons := fmt.Sprintf("%s  %s", yesButton, noButton)
+	b.WriteString(buttons + "\n\n")
+
+	// Help text
+	help := m.theme.Subtle.Render("←/→: Navigate | Enter: Confirm | Esc: Cancel")
+	b.WriteString(help)
+
+	// Center and box it
+	content := b.String()
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("39")).
+		Padding(1, 2).
+		Width(60).
+		Align(lipgloss.Center)
+
+	box := boxStyle.Render(content)
+
+	// Center vertically
+	verticalPadding := (m.height - lipgloss.Height(box)) / 2
+	if verticalPadding > 0 {
+		box = strings.Repeat("\n", verticalPadding) + box
+	}
+
+	return box
+}
+
+// handleConfirmKey handles keyboard input in confirm dialog
+func (m Model) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "left", "h":
+		m.confirmSelected = 0
+		return m, nil
+	case "right", "l":
+		m.confirmSelected = 1
+		return m, nil
+	case "enter":
+		confirmed := m.confirmSelected == 0
+		callback := m.confirmCallback
+		m.PopView()
+		if callback != nil {
+			return m, callback(confirmed)
+		}
+		return m, nil
+	case "esc":
+		m.PopView()
+		return m, nil
+	}
+	return m, nil
+}
+
+// ============================================================================
+// Phase 1: Progress Indicator
+// ============================================================================
+
+// ShowProgress displays a progress indicator
+func (m *Model) ShowProgress(title string) {
+	m.PushView(ViewModeProgress)
+	m.progressTitle = title
+	m.progressPercent = 0
+	m.progressBytes = 0
+	m.progressTotal = 0
+	m.progressSpeed = ""
+	m.progressETA = ""
+	m.progressStatus = ""
+	m.progressErr = nil
+}
+
+// UpdateProgress updates the progress indicator
+func (m *Model) UpdateProgress(percent float64, bytes, total int64, speed, eta, status string) {
+	m.progressPercent = percent
+	m.progressBytes = bytes
+	m.progressTotal = total
+	m.progressSpeed = speed
+	m.progressETA = eta
+	m.progressStatus = status
+}
+
+// SetProgressError sets an error for the progress indicator
+func (m *Model) SetProgressError(err error) {
+	m.progressErr = err
+}
+
+// CloseProgress closes the progress indicator and returns to previous view
+func (m *Model) CloseProgress() {
+	m.PopView()
+}
+
+// viewProgress renders the progress indicator
+func (m Model) viewProgress() string {
+	var b strings.Builder
+
+	// Title
+	title := m.theme.Title.Render(m.progressTitle)
+	b.WriteString(title + "\n\n")
+
+	// Error display
+	if m.progressErr != nil {
+		errorMsg := m.theme.Error.Render(fmt.Sprintf("❌ Error: %s", m.progressErr.Error()))
+		b.WriteString(errorMsg + "\n\n")
+
+		help := m.theme.Subtle.Render("Enter: Close | Esc: Cancel")
+		b.WriteString(help)
+	} else {
+		// Progress bar
+		barWidth := 50
+		filled := int(m.progressPercent * float64(barWidth) / 100)
+		if filled > barWidth {
+			filled = barWidth
+		}
+
+		bar := strings.Repeat("━", filled) + strings.Repeat("─", barWidth-filled)
+		progressBar := fmt.Sprintf("[%s] %.1f%%", bar, m.progressPercent)
+		b.WriteString(m.theme.Accent.Render(progressBar) + "\n\n")
+
+		// Stats
+		if m.progressTotal > 0 {
+			downloaded := formatBytes(m.progressBytes)
+			total := formatBytes(m.progressTotal)
+			stats := fmt.Sprintf("Downloaded: %s / %s", downloaded, total)
+			b.WriteString(m.theme.Normal.Render(stats) + "\n")
+		}
+
+		if m.progressSpeed != "" {
+			speed := fmt.Sprintf("Speed: %s", m.progressSpeed)
+			b.WriteString(m.theme.Normal.Render(speed) + "\n")
+		}
+
+		if m.progressETA != "" {
+			eta := fmt.Sprintf("ETA: %s", m.progressETA)
+			b.WriteString(m.theme.Normal.Render(eta) + "\n")
+		}
+
+		if m.progressStatus != "" {
+			b.WriteString("\n" + m.theme.Subtle.Render(m.progressStatus) + "\n")
+		}
+
+		b.WriteString("\n")
+
+		// Help text
+		help := m.theme.Subtle.Render("Ctrl+C: Cancel")
+		b.WriteString(help)
+	}
+
+	// Center and box it
+	content := b.String()
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("39")).
+		Padding(1, 2).
+		Width(70).
+		Align(lipgloss.Left)
+
+	box := boxStyle.Render(content)
+
+	// Center vertically
+	verticalPadding := (m.height - lipgloss.Height(box)) / 2
+	if verticalPadding > 0 {
+		box = strings.Repeat("\n", verticalPadding) + box
+	}
+
+	return box
+}
+
+// handleProgressKey handles keyboard input in progress view
+func (m Model) handleProgressKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		if m.progressErr != nil {
+			m.PopView()
+		}
+		return m, nil
+	case "esc", "ctrl+c":
+		m.PopView()
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+// ============================================================================
+// Phase 1: Model Installation Functions
+// ============================================================================
+
+// isModelInstalled checks if a model is installed
+func isModelInstalled(provider, modelID string) bool {
+	if provider != "ollama" {
+		// For cloud providers, models are always "available"
+		return true
+	}
+
+	// For Ollama, check if model exists locally
+	models := GetModelsForProvider("ollama")
+	for _, m := range models {
+		if m.ID == modelID && m.IsInstalled {
+			return true
+		}
+	}
+	return false
+}
+
+// installModelWithProgress installs a model with progress indicator
+func (m *Model) installModelWithProgress(provider, modelID string) tea.Cmd {
+	if provider != "ollama" {
+		// Only Ollama models need installation
+		m.messages = append(m.messages, Message{
+			Role:    "system",
+			Content: fmt.Sprintf("Model %s is ready to use.", modelID),
+		})
+		m.mode = ViewModeChat
+		return nil
+	}
+
+	// Show progress view
+	m.ShowProgress(fmt.Sprintf("Installing %s", modelID))
+
+	return func() tea.Msg {
+		return &ModelInstallStartMsg{
+			Provider: provider,
+			ModelID:  modelID,
+		}
+	}
+}
+
+// ModelInstallStartMsg signals to start model installation
+type ModelInstallStartMsg struct {
+	Provider string
+	ModelID  string
+}
+
+// ModelInstallProgressMsg updates installation progress
+type ModelInstallProgressMsg struct {
+	Percent float64
+	Bytes   int64
+	Total   int64
+	Speed   string
+	ETA     string
+	Status  string
+}
+
+// ModelInstallCompleteMsg signals installation completion
+type ModelInstallCompleteMsg struct {
+	ModelID string
+	Success bool
+	Error   error
+}
+
+// startModelInstallation starts model installation in background
+func (m *Model) startModelInstallation(provider, modelID string) tea.Cmd {
+	if provider != "ollama" {
+		return func() tea.Msg {
+			return &ModelInstallCompleteMsg{
+				ModelID: modelID,
+				Success: true,
+			}
+		}
+	}
+
+	return func() tea.Msg {
+		// Start ollama pull in background
+		cmd := exec.Command("ollama", "pull", modelID)
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return &ModelInstallCompleteMsg{
+				ModelID: modelID,
+				Success: false,
+				Error:   fmt.Errorf("failed to create pipe: %w", err),
+			}
+		}
+
+		if err := cmd.Start(); err != nil {
+			return &ModelInstallCompleteMsg{
+				ModelID: modelID,
+				Success: false,
+				Error:   fmt.Errorf("failed to start ollama: %w", err),
+			}
+		}
+
+		// Parse progress from stdout
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			// Parse ollama progress output
+			// Format: "pulling manifest" or "pulling <hash>... <percent>%"
+			if strings.Contains(line, "%") {
+				// Extract percentage
+				parts := strings.Fields(line)
+				for _, part := range parts {
+					if strings.HasSuffix(part, "%") {
+						percentStr := strings.TrimSuffix(part, "%")
+						if percent, err := parseFloat(percentStr); err == nil {
+							// Send progress update (this would need channel-based approach)
+							_ = percent
+						}
+					}
+				}
+			}
+		}
+
+		if err := cmd.Wait(); err != nil {
+			return &ModelInstallCompleteMsg{
+				ModelID: modelID,
+				Success: false,
+				Error:   fmt.Errorf("installation failed: %w", err),
+			}
+		}
+
+		return &ModelInstallCompleteMsg{
+			ModelID: modelID,
+			Success: true,
+		}
+	}
+}
+
+// parseFloat safely parses a float string
+func parseFloat(s string) (float64, error) {
+	s = strings.TrimSpace(s)
+	var f float64
+	_, err := fmt.Sscanf(s, "%f", &f)
+	return f, err
+}
+
+// ============================================================================
+// Phase 2: Work Mode System (Ask/Edit/Agent/Plan)
+// ============================================================================
+
+// switchWorkMode switches to a different work mode
+func (m *Model) switchWorkMode(mode WorkMode) tea.Cmd {
+	m.workMode = mode
+
+	// Add mode switch notification
+	modeDesc := ""
+	switch mode {
+	case WorkModeAsk:
+		modeDesc = "Quick questions and answers"
+	case WorkModeEdit:
+		modeDesc = "Code editing with file context"
+		// Auto-detect files in current directory
+		m.detectEditContext()
+	case WorkModeAgent:
+		modeDesc = "Autonomous multi-step task execution"
+	case WorkModePlan:
+		modeDesc = "Task analysis and planning"
+	}
+
+	m.messages = append(m.messages, Message{
+		Role:    "system",
+		Content: fmt.Sprintf("%s Mode: %s\n\n%s", mode.Icon(), mode.String(), modeDesc),
+	})
+
+	return nil
+}
+
+// detectEditContext auto-detects files for Edit mode
+func (m *Model) detectEditContext() {
+	// Try to get current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	// Look for common code files in current directory
+	// This is a simple implementation - could be enhanced
+	patterns := []string{"*.go", "*.py", "*.js", "*.ts", "*.java", "*.c", "*.cpp"}
+	m.editContextFiles = []string{}
+
+	for _, pattern := range patterns {
+		matches, _ := filepath.Glob(filepath.Join(cwd, pattern))
+		m.editContextFiles = append(m.editContextFiles, matches...)
+	}
+
+	// Limit to first 10 files
+	if len(m.editContextFiles) > 10 {
+		m.editContextFiles = m.editContextFiles[:10]
+	}
+}
+
+// buildPromptForMode builds a mode-specific prompt
+func (m *Model) buildPromptForMode(userInput string) string {
+	switch m.workMode {
+	case WorkModeAsk:
+		return m.buildAskPrompt(userInput)
+	case WorkModeEdit:
+		return m.buildEditPrompt(userInput)
+	case WorkModeAgent:
+		return m.buildAgentPrompt(userInput)
+	case WorkModePlan:
+		return m.buildPlanPrompt(userInput)
+	default:
+		return userInput
+	}
+}
+
+// buildAskPrompt builds a prompt for Ask mode
+func (m *Model) buildAskPrompt(userInput string) string {
+	return fmt.Sprintf(`You are a helpful assistant. Answer the following question concisely and accurately.
+
+Question: %s
+
+Provide a clear, direct answer. Keep it brief unless more detail is specifically requested.`, userInput)
+}
+
+// buildEditPrompt builds a prompt for Edit mode
+func (m *Model) buildEditPrompt(userInput string) string {
+	var prompt strings.Builder
+
+	prompt.WriteString("You are an expert code editor. Your task is to modify code based on the request.\n\n")
+
+	// Add file context if available
+	if len(m.editContextFiles) > 0 {
+		prompt.WriteString("## File Context\n\n")
+		for i, file := range m.editContextFiles {
+			if i >= 3 {
+				break // Limit to 3 files to avoid token overflow
+			}
+			content, err := os.ReadFile(file)
+			if err == nil && len(content) < 10000 { // Limit file size
+				prompt.WriteString(fmt.Sprintf("### File: %s\n```\n%s\n```\n\n", file, string(content)))
+			}
+		}
+	}
+
+	prompt.WriteString(fmt.Sprintf("## Task\n%s\n\n", userInput))
+	prompt.WriteString("## Instructions\n")
+	prompt.WriteString("1. Analyze the code and the requested changes\n")
+	prompt.WriteString("2. Provide the modified code with clear explanations\n")
+	prompt.WriteString("3. Highlight what changed and why\n")
+	prompt.WriteString("4. Suggest any additional improvements if relevant\n")
+
+	return prompt.String()
+}
+
+// buildAgentPrompt builds a prompt for Agent mode
+func (m *Model) buildAgentPrompt(userInput string) string {
+	return fmt.Sprintf(`You are an autonomous agent capable of breaking down complex tasks into steps and executing them.
+
+Task: %s
+
+Please:
+1. Break down this task into 3-6 clear, executable steps
+2. For each step, identify:
+   - What needs to be done
+   - What tools or resources are needed
+   - Estimated time
+3. Execute the steps systematically
+4. Report progress and results for each step
+
+Format your response as a structured plan first, then proceed with execution.`, userInput)
+}
+
+// buildPlanPrompt builds a prompt for Plan mode
+func (m *Model) buildPlanPrompt(userInput string) string {
+	return fmt.Sprintf(`You are a planning expert. Analyze this goal and create a detailed execution plan.
+
+Goal: %s
+
+Provide a comprehensive plan including:
+
+1. **Step-by-Step Breakdown**: 
+   - Number each step
+   - Provide clear descriptions
+   - Estimate time for each step (in minutes)
+
+2. **Risk Assessment**:
+   - Identify potential risks (Low/Medium/High)
+   - Suggest mitigation strategies
+
+3. **Dependencies**:
+   - List required tools, libraries, or resources
+   - Note any prerequisite steps
+
+4. **Files Affected**:
+   - Which files will be created/modified
+   - Impact analysis
+
+5. **Total Estimate**:
+   - Overall time estimate
+   - Complexity assessment
+
+Format your response in clear sections with markdown.`, userInput)
+}
+
+// getWorkModePromptModifier returns a system message modifier based on work mode
+func (m *Model) getWorkModePromptModifier() string {
+	switch m.workMode {
+	case WorkModeAsk:
+		return "You are in Ask mode. Provide concise, accurate answers to user questions."
+	case WorkModeEdit:
+		return "You are in Edit mode. Focus on code analysis and modification. Provide clear diffs and explanations."
+	case WorkModeAgent:
+		return "You are in Agent mode. Break down tasks into steps and execute them systematically. Show progress."
+	case WorkModePlan:
+		return "You are in Plan mode. Analyze tasks and create detailed execution plans with risk assessment."
+	default:
+		return ""
+	}
+}
+
+// ================== Phase 3: Multi-Model Functions ==================
+
+// toggleMultiModelMode toggles multi-model mode on/off
+func (m *Model) toggleMultiModelMode() tea.Cmd {
+	m.multiModelEnabled = !m.multiModelEnabled
+
+	status := "disabled"
+	if m.multiModelEnabled {
+		status = "enabled"
+	}
+
+	m.messages = append(m.messages, Message{
+		Role:    "system",
+		Content: fmt.Sprintf("🔀 Multi-model mode %s\n\nUse /multimodel to select models for comparison.", status),
+	})
+
+	return nil
+}
+
+// initializeModelSelections populates available models for selection
+func (m *Model) initializeModelSelections() {
+	m.selectedModels = []ModelSelection{}
+
+	// Get all available providers and their models
+	providers := []string{"ollama", "anthropic", "openai", "google", "groq", "openrouter"}
+
+	for _, provider := range providers {
+		models := GetModelsForProvider(provider)
+		for _, model := range models {
+			// Only include installed models for Ollama, all models for cloud providers
+			if provider == "ollama" && !model.IsInstalled {
+				continue
+			}
+
+			displayName := fmt.Sprintf("%s - %s", provider, model.Name)
+			if model.Description != "" {
+				displayName = fmt.Sprintf("%s (%s)", displayName, model.Description)
+			}
+
+			selection := ModelSelection{
+				Provider:    provider,
+				Model:       model.ID,
+				DisplayName: displayName,
+				Selected:    false,
+			}
+
+			m.selectedModels = append(m.selectedModels, selection)
+		}
+	}
+}
+
+// sendToMultipleModels sends a message to all selected models in parallel
+func (m *Model) sendToMultipleModels(text string) tea.Cmd {
+	if !m.multiModelEnabled || len(m.selectedModels) == 0 {
+		return m.sendToLLM(text)
+	}
+
+	// Count selected models
+	selectedCount := 0
+	for _, model := range m.selectedModels {
+		if model.Selected {
+			selectedCount++
+		}
+	}
+
+	if selectedCount == 0 {
+		m.messages = append(m.messages, Message{
+			Role:    "system",
+			Content: "⚠️  No models selected. Use /multimodel to select models.",
+		})
+		return nil
+	}
+
+	// Clear previous responses
+	m.modelResponses = make(map[string]*ModelResponse)
+	m.showCompareView = true
+
+	// Build mode-specific prompt
+	enhancedPrompt := m.buildPromptForMode(text)
+
+	// Convert messages to the right format
+	var chatMsgs []Message
+	for _, msg := range m.messages {
+		if msg.Role == "system" && strings.Contains(msg.Content, "Welcome to DevOrch") {
+			continue
+		}
+		chatMsgs = append(chatMsgs, msg)
+	}
+	chatMsgs = append(chatMsgs, Message{Role: "user", Content: enhancedPrompt})
+
+	// Send to all selected models in parallel
+	var cmds []tea.Cmd
+	for _, model := range m.selectedModels {
+		if !model.Selected {
+			continue
+		}
+
+		modelKey := fmt.Sprintf("%s:%s", model.Provider, model.Model)
+		m.modelResponses[modelKey] = &ModelResponse{
+			Provider:    model.Provider,
+			Model:       model.Model,
+			DisplayName: model.DisplayName,
+			InProgress:  true,
+			StartTime:   time.Now(),
+		}
+
+		// Create command to send to this model
+		cmd := m.sendToSingleModel(model.Provider, model.Model, modelKey, chatMsgs)
+		cmds = append(cmds, cmd)
+	}
+
+	return tea.Batch(cmds...)
+}
+
+// sendToSingleModel sends a message to a single model
+func (m *Model) sendToSingleModel(provider, model, modelKey string, messages []Message) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
+
+		startTime := time.Now()
+		response, err := ChatWithProvider(ctx, provider, model, messages)
+		duration := time.Since(startTime).Milliseconds()
+
+		return ModelResponseMsg{
+			ModelKey: modelKey,
+			Content:  response,
+			Duration: duration,
+			Error:    err,
+		}
+	}
+}
+
+// ModelResponseMsg is sent when a model completes its response
+type ModelResponseMsg struct {
+	ModelKey string
+	Content  string
+	Duration int64
+	Error    error
+}
+
+// handleModelResponse handles a response from a model
+func (m *Model) handleModelResponse(msg ModelResponseMsg) {
+	if resp, ok := m.modelResponses[msg.ModelKey]; ok {
+		resp.Content = msg.Content
+		resp.Duration = msg.Duration
+		resp.Error = msg.Error
+		resp.InProgress = false
+
+		// Count completed responses
+		completedCount := 0
+		totalCount := 0
+		for _, r := range m.modelResponses {
+			totalCount++
+			if !r.InProgress {
+				completedCount++
+			}
+		}
+
+		// Update viewport content
+		if completedCount == totalCount {
+			// All responses complete, show comparison
+			m.viewport.SetContent(m.renderCompareView())
+		} else {
+			// Still waiting for some responses
+			m.viewport.SetContent(m.renderCompareView())
+		}
+		m.viewport.GotoBottom()
+	}
+}
+
+// rateModelResponse allows user to rate a model's response
+func (m *Model) rateModelResponse(modelKey string, rating int) {
+	m.modelRatings[modelKey] = ResponseRating{
+		ModelKey: modelKey,
+		Rating:   rating,
+	}
+
+	// Update viewport to show rating
+	m.viewport.SetContent(m.renderCompareView())
+}
+
+// viewMultiModelSelect renders the multi-model selection view
+func (m Model) viewMultiModelSelect() string {
+	var sb strings.Builder
+
+	sb.WriteString(m.theme.Title.Render("Select Models for Comparison") + "\n\n")
+	sb.WriteString(m.theme.Subtle.Render("Use Space to toggle, Enter to confirm, Esc to cancel") + "\n\n")
+
+	// Show selection list
+	for i, model := range m.selectedModels {
+		cursor := " "
+		if i == m.selectionIdx {
+			cursor = ">"
+		}
+
+		checkbox := "[ ]"
+		if model.Selected {
+			checkbox = "[✓]"
+		}
+
+		if i == m.selectionIdx {
+			sb.WriteString(m.theme.Selected.Render(fmt.Sprintf("%s %s %s\n", cursor, checkbox, model.DisplayName)))
+		} else {
+			sb.WriteString(fmt.Sprintf("%s %s %s\n", cursor, checkbox, model.DisplayName))
+		}
+	}
+
+	// Show selection count
+	selectedCount := 0
+	for _, model := range m.selectedModels {
+		if model.Selected {
+			selectedCount++
+		}
+	}
+
+	sb.WriteString("\n")
+	sb.WriteString(m.theme.Accent.Render(fmt.Sprintf("Selected: %d models", selectedCount)) + "\n")
+
+	return sb.String()
+}
+
+// viewCompare renders the comparison view for multi-model responses
+func (m Model) viewCompare() string {
+	return m.renderCompareView()
+}
+
+// renderCompareView renders the comparison view content
+func (m Model) renderCompareView() string {
+	var sb strings.Builder
+
+	sb.WriteString(m.theme.Title.Render("Multi-Model Comparison") + "\n\n")
+
+	if len(m.modelResponses) == 0 {
+		sb.WriteString(m.theme.Subtle.Render("No responses yet. Send a message to compare models.") + "\n")
+		return sb.String()
+	}
+
+	// Sort model keys for consistent display
+	modelKeys := make([]string, 0, len(m.modelResponses))
+	for key := range m.modelResponses {
+		modelKeys = append(modelKeys, key)
+	}
+
+	// Display each model's response
+	for i, key := range modelKeys {
+		resp := m.modelResponses[key]
+
+		// Header with model name and status
+		header := fmt.Sprintf("━━━ %s ━━━", resp.DisplayName)
+		sb.WriteString(m.theme.Accent.Render(header) + "\n")
+
+		// Duration and status
+		if resp.InProgress {
+			elapsed := time.Since(resp.StartTime).Seconds()
+			sb.WriteString(m.theme.Subtle.Render(fmt.Sprintf("⏳ In progress... (%.1fs elapsed)", elapsed)) + "\n\n")
+		} else if resp.Error != nil {
+			sb.WriteString(m.theme.Error.Render(fmt.Sprintf("❌ Error: %v", resp.Error)) + "\n")
+			sb.WriteString(m.theme.Subtle.Render(fmt.Sprintf("Duration: %dms", resp.Duration)) + "\n\n")
+		} else {
+			sb.WriteString(m.theme.Success.Render(fmt.Sprintf("✓ Complete (%dms)", resp.Duration)) + "\n\n")
+
+			// Response content
+			sb.WriteString(resp.Content + "\n\n")
+
+			// Rating
+			if rating, ok := m.modelRatings[key]; ok {
+				ratingIcon := ""
+				if rating.Rating == 2 {
+					ratingIcon = "👍"
+				} else if rating.Rating == 1 {
+					ratingIcon = "👎"
+				}
+				sb.WriteString(m.theme.Subtle.Render(fmt.Sprintf("Your rating: %s", ratingIcon)) + "\n")
+			} else {
+				sb.WriteString(m.theme.Subtle.Render("Press 1 for 👎, 2 for 👍 to rate this response") + "\n")
+			}
+		}
+
+		if i < len(modelKeys)-1 {
+			sb.WriteString("\n")
+		}
+	}
+
+	return sb.String()
 }
