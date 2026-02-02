@@ -91,27 +91,16 @@ var englishTranslations = map[string]string{
 	"status.complete":   "Complete",
 	"status.failed":     "Failed",
 
-	// TUI
-	"tui.input.placeholder": "Type a message...",
-	"tui.sidebar.chats":     "Chats",
-	"tui.sidebar.tools":     "Tools",
-	"tui.sidebar.settings":  "Settings",
-	"tui.help.title":        "Keyboard Shortcuts",
-	"tui.help.quit":         "Quit",
-	"tui.help.send":         "Send message",
-	"tui.help.newline":      "New line",
-	"tui.help.clear":        "Clear chat",
-	"tui.help.copy":         "Copy last response",
+	// Terminal Interface
+	"terminal.input.placeholder": "Type a message...",
 
-	// Web UI
-	"web.title":      "DevOrch Web UI",
-	"web.connect":    "Connect",
-	"web.disconnect": "Disconnect",
-	"web.settings":   "Settings",
-	"web.history":    "History",
-	"web.new_chat":   "New Chat",
-	"web.export":     "Export",
-	"web.import":     "Import",
+	// CLI Interface
+	"cli.title":    "DevOrch CLI",
+	"cli.settings": "Settings",
+	"cli.history":  "History",
+	"cli.new_chat": "New Chat",
+	"cli.export":   "Export",
+	"cli.import":   "Import",
 
 	// Memory
 	"memory.title":    "Project Memory",

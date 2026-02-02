@@ -91,27 +91,16 @@ var japaneseTranslations = map[string]string{
 	"status.complete":   "完了",
 	"status.failed":     "失敗",
 
-	// TUI
-	"tui.input.placeholder": "メッセージを入力...",
-	"tui.sidebar.chats":     "チャット",
-	"tui.sidebar.tools":     "ツール",
-	"tui.sidebar.settings":  "設定",
-	"tui.help.title":        "キーボードショートカット",
-	"tui.help.quit":         "終了",
-	"tui.help.send":         "メッセージを送信",
-	"tui.help.newline":      "改行",
-	"tui.help.clear":        "チャットをクリア",
-	"tui.help.copy":         "最後の応答をコピー",
+	// Terminal Interface
+	"terminal.input.placeholder": "メッセージを入力...",
 
-	// Web UI
-	"web.title":      "DevOrch Web UI",
-	"web.connect":    "接続",
-	"web.disconnect": "切断",
-	"web.settings":   "設定",
-	"web.history":    "履歴",
-	"web.new_chat":   "新しいチャット",
-	"web.export":     "エクスポート",
-	"web.import":     "インポート",
+	// CLI Interface
+	"cli.title":    "DevOrch CLI",
+	"cli.settings": "設定",
+	"cli.history":  "履歴",
+	"cli.new_chat": "新しいチャット",
+	"cli.export":   "エクスポート",
+	"cli.import":   "インポート",
 
 	// Memory
 	"memory.title":    "プロジェクトメモリ",

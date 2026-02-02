@@ -96,6 +96,35 @@ func NewEngine() *Engine {
 	}
 }
 
+// EngineStats represents compaction engine statistics
+type EngineStats struct {
+	TotalSummaries  int
+	TotalSpaceSaved int64
+	ActiveSessions  int
+}
+
+// GetConfig returns the current engine configuration
+func (e *Engine) GetConfig() EngineConfig {
+	return e.config
+}
+
+// GetStats returns current engine statistics
+func (e *Engine) GetStats() EngineStats {
+	e.summariesMu.RLock()
+	defer e.summariesMu.RUnlock()
+
+	totalSpaceSaved := int64(0)
+	for _, summary := range e.summaries {
+		totalSpaceSaved += (summary.OriginalSize - summary.CompressedSize)
+	}
+
+	return EngineStats{
+		TotalSummaries:  len(e.summaries),
+		TotalSpaceSaved: totalSpaceSaved,
+		ActiveSessions:  len(e.summaries), // 동일하게 처리
+	}
+}
+
 // AnalyzePotential analyzes compaction potential across sessions
 func (e *Engine) AnalyzePotential() (*AnalysisResult, error) {
 	// Simulate analysis of existing sessions
@@ -216,11 +245,6 @@ func (e *Engine) compressData(content CompressedContent) ([]byte, error) {
 	compressed = jsonData[:len(jsonData)/3] // Simulate 66% compression
 
 	return compressed, nil
-}
-
-// GetConfig returns current compaction configuration
-func (e *Engine) GetConfig() EngineConfig {
-	return e.config
 }
 
 // UpdateConfig updates the entire configuration

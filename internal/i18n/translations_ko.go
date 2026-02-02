@@ -91,27 +91,16 @@ var koreanTranslations = map[string]string{
 	"status.complete":   "완료",
 	"status.failed":     "실패",
 
-	// TUI
-	"tui.input.placeholder": "메시지를 입력하세요...",
-	"tui.sidebar.chats":     "채팅",
-	"tui.sidebar.tools":     "도구",
-	"tui.sidebar.settings":  "설정",
-	"tui.help.title":        "키보드 단축키",
-	"tui.help.quit":         "종료",
-	"tui.help.send":         "메시지 보내기",
-	"tui.help.newline":      "줄바꿈",
-	"tui.help.clear":        "채팅 지우기",
-	"tui.help.copy":         "마지막 응답 복사",
+	// Terminal Interface
+	"terminal.input.placeholder": "메시지를 입력하세요...",
 
-	// Web UI
-	"web.title":      "DevOrch 웹 UI",
-	"web.connect":    "연결",
-	"web.disconnect": "연결 해제",
-	"web.settings":   "설정",
-	"web.history":    "기록",
-	"web.new_chat":   "새 채팅",
-	"web.export":     "내보내기",
-	"web.import":     "가져오기",
+	// CLI Interface
+	"cli.title":    "DevOrch CLI",
+	"cli.settings": "설정",
+	"cli.history":  "기록",
+	"cli.new_chat": "새 채팅",
+	"cli.export":   "내보내기",
+	"cli.import":   "가져오기",
 
 	// Memory
 	"memory.title":    "프로젝트 메모리",

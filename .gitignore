@@ -52,9 +52,6 @@ vendor/
 .env.local
 .env.*.local
 
-# Compare folder (reference code, not part of project)
-docs/compare/
-
 # Temporary files
 tmp/
 temp/

@@ -18,7 +18,6 @@ import (
 	"devorch/internal/mcp"
 	"devorch/internal/provider"
 	"devorch/internal/router"
-	"devorch/internal/tui"
 )
 
 // mapProviderName maps CLI provider names to internal provider names
@@ -36,7 +35,6 @@ func usage() {
 
 Usage:
   devorch                   # Start CLI mode (direct terminal, chat with LLM)
-  devorch tui               # Start TUI mode (bubbletea with alt screen)
   
   devorch doctor            # Check system health
   devorch providers         # List available providers
@@ -46,8 +44,6 @@ Usage:
   
   devorch connect           # Interactive provider setup (OpenCode style)
   devorch connect-list      # List all providers with connection status
-  devorch themes            # List available themes
-  devorch theme <name>      # Preview a theme
   
   devorch login --provider github|google|openai|anthropic
   devorch login-status --provider github|google|openai|anthropic
@@ -58,9 +54,6 @@ Usage:
   devorch bench --provider ollama --model llama3.2 --iterations 5
   devorch stats --provider ollama --model llama3.2
   devorch mcp               # Manage MCP servers
-  
-  devorch test-tui          # Test all TUI components without interactive mode
-  devorch test-commands     # List all slash commands
 
 CLI Mode Commands (inside devorch):
   /help                     Show available commands
@@ -70,6 +63,9 @@ CLI Mode Commands (inside devorch):
   /connect                  Show provider status
   /themes                   List themes
   /clear                    Clear chat history
+  /autonomous start <goal>  Start AI OS autonomous mode
+  /autonomous status        Show autonomous progress
+  /autonomous stop          Stop autonomous mode
 
 Env:
   DEVORCH_DB_PATH=./devorch.db
@@ -119,38 +115,9 @@ func main() {
 		startCLI()
 		return
 
-	case "tui":
-		// Start TUI mode (bubbletea with alt screen)
-		startTUI()
-		return
-
-	case "test-commands":
-		// Debug: list all slash commands
-		runTestCommands()
-		return
-
-	case "test-tui":
-		// Test all TUI components without interactive mode
-		runTestTUI()
-		return
-
 	case "connect-list":
 		// List all providers with connection status (OpenCode style)
 		runConnectList()
-		return
-
-	case "themes":
-		// List all available themes
-		runListThemes()
-		return
-
-	case "theme":
-		// Preview a specific theme
-		themeName := ""
-		if len(os.Args) > 2 {
-			themeName = os.Args[2]
-		}
-		runPreviewTheme(themeName)
 		return
 
 	case "setup":
@@ -457,50 +424,9 @@ func startCLI() {
 	}
 }
 
-// startTUI starts the interactive TUI mode
-func startTUI() {
-	// Show welcome banner
-	theme := tui.DefaultTheme()
-
-	profile, err := global.GetHWProfile()
-	if err != nil {
-		tui.PrintError(err, theme)
-		os.Exit(1)
-	}
-
-	// Display system info banner
-	fmt.Println()
-	fmt.Println(theme.Title.Render("  🚀 DevOrch - AI Coding Agent  "))
-	fmt.Println(theme.Border.Render("────────────────────────────────────────"))
-	fmt.Printf("  %s %s/%s | %dGB RAM | %s\n",
-		theme.Subtle.Render("System:"),
-		profile.OS, profile.Arch,
-		profile.MemTotalMB/1024,
-		func() string {
-			if profile.HasAccel {
-				return profile.AccelKind + " GPU"
-			}
-			return "No GPU"
-		}())
-	fmt.Printf("  %s %s (auto-recommended)\n",
-		theme.Subtle.Render("Model Size:"),
-		theme.Accent.Render(profile.RecommendedModelSize()))
-	fmt.Printf("  %s %s\n",
-		theme.Subtle.Render("Tier:"),
-		theme.Success.Render(profile.Tier()))
-	fmt.Println(theme.Border.Render("────────────────────────────────────────"))
-	fmt.Println()
-
-	// Start interactive TUI
-	if err := tui.RunInteractive(""); err != nil {
-		tui.PrintError(err, theme)
-		os.Exit(1)
-	}
-}
-
 // runAutoSetup runs the automatic hardware detection and model setup
 func runAutoSetup() {
-	theme := tui.DefaultTheme()
+	theme := cli.DefaultTheme()
 
 	fmt.Println()
 	fmt.Println(theme.Title.Render("  🔧 DevOrch Auto Setup  "))
@@ -508,7 +434,7 @@ func runAutoSetup() {
 
 	result, err := autosetup.Run()
 	if err != nil {
-		tui.PrintError(err, theme)
+		cli.PrintError(err, theme)
 		os.Exit(1)
 	}
 
@@ -577,7 +503,7 @@ func min(a, b int) int {
 
 // runInstallModels installs essential Ollama models
 func runInstallModels() {
-	theme := tui.DefaultTheme()
+	theme := cli.DefaultTheme()
 
 	fmt.Println()
 	fmt.Println(theme.Title.Render("  📦 DevOrch Model Installer  "))
@@ -600,7 +526,7 @@ func runInstallModels() {
 	fmt.Println()
 
 	if err := autosetup.InstallEssentialModels(true); err != nil {
-		tui.PrintError(err, theme)
+		cli.PrintError(err, theme)
 		os.Exit(1)
 	}
 
@@ -612,7 +538,7 @@ func runInstallModels() {
 
 // runConnect handles interactive provider connection
 func runConnect() {
-	theme := tui.DefaultTheme()
+	theme := cli.DefaultTheme()
 
 	fmt.Println()
 	fmt.Println(theme.Title.Render("  🔗 DevOrch Connect  "))
@@ -676,7 +602,7 @@ func runConnect() {
 
 // runMCPSetup runs MCP server auto-configuration
 func runMCPSetup() {
-	theme := tui.DefaultTheme()
+	theme := cli.DefaultTheme()
 
 	fmt.Println()
 	fmt.Println(theme.Title.Render("  🔌 DevOrch MCP Setup  "))
@@ -823,11 +749,11 @@ func runTestCommands() {
 	fmt.Println("=== DevOrch Slash Commands Test ===")
 	fmt.Println()
 
-	commands := tui.GetSlashCommands()
+	commands := cli.GetSlashCommands()
 	fmt.Printf("Total commands: %d\n\n", len(commands))
 
 	// Group by category
-	categories := make(map[string][]tui.SlashCommand)
+	categories := make(map[string][]cli.SlashCommand)
 	for _, cmd := range commands {
 		categories[cmd.Category] = append(categories[cmd.Category], cmd)
 	}
@@ -841,7 +767,7 @@ func runTestCommands() {
 		}
 		fmt.Printf("📁 %s (%d):\n", cat, len(cmds))
 		for _, cmd := range cmds {
-			fmt.Printf("   /%s - %s\n", cmd.Name, cmd.Description)
+			fmt.Printf("   /%s - %s\n", cmd.Command, cmd.Description)
 		}
 		fmt.Println()
 	}
@@ -850,11 +776,11 @@ func runTestCommands() {
 	fmt.Println("=== Filter Test ===")
 	testFilters := []string{"/th", "/con", "/mod", "/new"}
 	for _, filter := range testFilters {
-		filtered := tui.FilterCommands(filter)
+		filtered := cli.FilterCommands(filter)
 		fmt.Printf("Filter '%s': ", filter)
 		names := make([]string, len(filtered))
 		for i, cmd := range filtered {
-			names[i] = "/" + cmd.Name
+			names[i] = "/" + cmd.Command
 		}
 		fmt.Println(strings.Join(names, ", "))
 	}
@@ -862,7 +788,7 @@ func runTestCommands() {
 	// Test themes
 	fmt.Println()
 	fmt.Println("=== Available Themes ===")
-	themes := tui.AvailableThemes()
+	themes := cli.AvailableThemes()
 	fmt.Printf("Total: %d themes\n", len(themes))
 	for i, th := range themes {
 		if i > 0 && i%5 == 0 {
@@ -873,141 +799,15 @@ func runTestCommands() {
 	fmt.Println()
 }
 
-// runTestTUI tests all TUI components without interactive mode
-func runTestTUI() {
-	theme := tui.DefaultTheme()
-
-	fmt.Println()
-	fmt.Println(theme.Title.Render("  🧪 DevOrch TUI Component Test  "))
-	fmt.Println(theme.Border.Render("════════════════════════════════════════"))
-	fmt.Println()
-
-	// 1. Test Slash Commands
-	fmt.Println(theme.Accent.Render("1️⃣  Slash Commands"))
-	fmt.Println(theme.Border.Render("────────────────────────────────────────"))
-	commands := tui.GetSlashCommands()
-	fmt.Printf("   Total: %d commands\n", len(commands))
-
-	categories := make(map[string]int)
-	for _, cmd := range commands {
-		categories[cmd.Category]++
-	}
-	for cat, count := range categories {
-		fmt.Printf("   • %s: %d\n", cat, count)
-	}
-	fmt.Println()
-
-	// 2. Test Themes
-	fmt.Println(theme.Accent.Render("2️⃣  Themes"))
-	fmt.Println(theme.Border.Render("────────────────────────────────────────"))
-	themes := tui.AvailableThemes()
-	fmt.Printf("   Total: %d themes\n", len(themes))
-	fmt.Printf("   Preview: %s, %s, %s...\n", themes[0], themes[1], themes[2])
-	fmt.Println()
-
-	// 3. Test Providers (Connect)
-	fmt.Println(theme.Accent.Render("3️⃣  Providers (/connect)"))
-	fmt.Println(theme.Border.Render("────────────────────────────────────────"))
-	providers := tui.GetConnectProviders()
-	popularCount := 0
-	otherCount := 0
-	connectedCount := 0
-	for _, p := range providers {
-		if p.Category == "Popular" {
-			popularCount++
-		} else {
-			otherCount++
-		}
-		if p.IsConnected {
-			connectedCount++
-		}
-	}
-	fmt.Printf("   Total: %d providers\n", len(providers))
-	fmt.Printf("   Popular: %d | Other: %d\n", popularCount, otherCount)
-	fmt.Printf("   Connected: %d\n", connectedCount)
-	fmt.Println()
-
-	// 4. Test Models (Local)
-	fmt.Println(theme.Accent.Render("4️⃣  Local Models (Ollama)"))
-	fmt.Println(theme.Border.Render("────────────────────────────────────────"))
-	localProviders := tui.GetAvailableProviders()
-	ollamaAvailable := false
-	ollamaModels := 0
-	for _, p := range localProviders {
-		if p.Name == "ollama" && p.IsAvailable {
-			ollamaAvailable = true
-			ollamaModels = len(p.Models)
-		}
-	}
-	if ollamaAvailable {
-		fmt.Printf("   Ollama: %s\n", theme.Success.Render("✓ Running"))
-		fmt.Printf("   Installed models: %d\n", ollamaModels)
-	} else {
-		fmt.Printf("   Ollama: %s\n", theme.Warning.Render("✗ Not running"))
-	}
-	fmt.Println()
-
-	// 5. Test Essential Models
-	fmt.Println(theme.Accent.Render("5️⃣  Essential Models Catalog"))
-	fmt.Println(theme.Border.Render("────────────────────────────────────────"))
-	essentials := tui.EssentialOllamaModels
-	fmt.Printf("   Total: %d models in catalog\n", len(essentials))
-	for i, m := range essentials[:min(5, len(essentials))] {
-		fmt.Printf("   %d. %s (%s) - %s\n", i+1, m.Name, m.Size, m.Description)
-	}
-	if len(essentials) > 5 {
-		fmt.Printf("   ... and %d more\n", len(essentials)-5)
-	}
-	fmt.Println()
-
-	// 6. Test System Info
-	fmt.Println(theme.Accent.Render("6️⃣  System Info"))
-	fmt.Println(theme.Border.Render("────────────────────────────────────────"))
-	profile, err := global.GetHWProfile()
-	if err != nil {
-		fmt.Printf("   Error: %v\n", err)
-	} else {
-		fmt.Printf("   OS: %s/%s\n", profile.OS, profile.Arch)
-		fmt.Printf("   RAM: %d GB\n", profile.MemTotalMB/1024)
-		fmt.Printf("   GPU: %v (%s)\n", profile.HasAccel, profile.AccelKind)
-		fmt.Printf("   Tier: %s\n", profile.Tier())
-		fmt.Printf("   Recommended: %s\n", profile.RecommendedModelSize())
-	}
-	fmt.Println()
-
-	// 7. Test Filter
-	fmt.Println(theme.Accent.Render("7️⃣  Command Filter Test"))
-	fmt.Println(theme.Border.Render("────────────────────────────────────────"))
-	testFilters := []string{"/con", "/mod", "/the", "/new", "/hel"}
-	for _, filter := range testFilters {
-		filtered := tui.FilterCommands(filter)
-		names := make([]string, 0, len(filtered))
-		for _, cmd := range filtered {
-			names = append(names, "/"+cmd.Name)
-		}
-		if len(names) > 3 {
-			names = append(names[:3], "...")
-		}
-		fmt.Printf("   %s → %s\n", filter, strings.Join(names, ", "))
-	}
-	fmt.Println()
-
-	// Summary
-	fmt.Println(theme.Border.Render("════════════════════════════════════════"))
-	fmt.Println(theme.Success.Render("✓ All TUI components tested successfully!"))
-	fmt.Println()
-	fmt.Println("Run 'devorch' to start the interactive TUI.")
-}
-
 // runConnectList lists all providers with connection status
 func runConnectList() {
-	theme := tui.DefaultTheme()
+	theme := cli.DefaultTheme()
 
 	fmt.Println()
 	fmt.Println(theme.Title.Render("  🔗 Provider Connection Status  "))
 	fmt.Println()
 
-	providers := tui.GetConnectProviders()
+	providers := cli.GetConnectProviders()
 	store := auth.GetStore()
 
 	// Group by category
@@ -1060,114 +860,4 @@ func runConnectList() {
 	fmt.Printf("Total: %d/%d providers connected\n", connectedCount, len(providers))
 	fmt.Println()
 	fmt.Println("Use 'devorch connect' for interactive setup or 'devorch' (CLI mode) for OAuth.")
-}
-
-// runListThemes lists all available themes
-func runListThemes() {
-	theme := tui.DefaultTheme()
-
-	fmt.Println()
-	fmt.Println(theme.Title.Render("  🎨 Available Themes  "))
-	fmt.Println()
-
-	themes := tui.AvailableThemes()
-
-	// Group themes by style
-	darkThemes := []string{}
-	lightThemes := []string{}
-	colorThemes := []string{}
-
-	for _, t := range themes {
-		lower := strings.ToLower(t)
-		if strings.Contains(lower, "light") {
-			lightThemes = append(lightThemes, t)
-		} else if strings.Contains(lower, "dark") || strings.Contains(lower, "dracula") ||
-			strings.Contains(lower, "monokai") || strings.Contains(lower, "nord") ||
-			strings.Contains(lower, "gruvbox") || strings.Contains(lower, "tokyo") {
-			darkThemes = append(darkThemes, t)
-		} else {
-			colorThemes = append(colorThemes, t)
-		}
-	}
-
-	fmt.Println(theme.Accent.Render("Dark Themes:"))
-	for i, t := range darkThemes {
-		if i > 0 && i%4 == 0 {
-			fmt.Println()
-		}
-		fmt.Printf("  %-18s", t)
-	}
-	fmt.Println()
-	fmt.Println()
-
-	fmt.Println(theme.Accent.Render("Light Themes:"))
-	for i, t := range lightThemes {
-		if i > 0 && i%4 == 0 {
-			fmt.Println()
-		}
-		fmt.Printf("  %-18s", t)
-	}
-	fmt.Println()
-	fmt.Println()
-
-	fmt.Println(theme.Accent.Render("Color Themes:"))
-	for i, t := range colorThemes {
-		if i > 0 && i%4 == 0 {
-			fmt.Println()
-		}
-		fmt.Printf("  %-18s", t)
-	}
-	fmt.Println()
-	fmt.Println()
-
-	fmt.Printf("Total: %d themes\n", len(themes))
-	fmt.Println()
-	fmt.Println("Use 'devorch theme <name>' to preview a theme.")
-}
-
-// runPreviewTheme previews a specific theme
-func runPreviewTheme(name string) {
-	if name == "" {
-		fmt.Println("Usage: devorch theme <name>")
-		fmt.Println()
-		fmt.Println("Available themes:")
-		themes := tui.AvailableThemes()
-		for i, t := range themes {
-			if i > 0 && i%5 == 0 {
-				fmt.Println()
-			}
-			fmt.Printf("  %s", t)
-		}
-		fmt.Println()
-		return
-	}
-
-	theme := tui.GetTheme(name)
-
-	fmt.Println()
-	fmt.Println(theme.Title.Render(fmt.Sprintf("  🎨 Theme Preview: %s  ", name)))
-	fmt.Println(theme.Border.Render("════════════════════════════════════════"))
-	fmt.Println()
-
-	// Show different styles
-	fmt.Println(theme.Title.Render("Title Style"))
-	fmt.Println(theme.Accent.Render("Accent Style"))
-	fmt.Println(theme.Success.Render("Success Style"))
-	fmt.Println(theme.Warning.Render("Warning Style"))
-	fmt.Println(theme.Error.Render("Error Style"))
-	fmt.Println(theme.Subtle.Render("Subtle Style"))
-	fmt.Println(theme.Border.Render("Border Style"))
-	fmt.Println()
-
-	// Sample message display
-	fmt.Println(theme.Border.Render("────────────────────────────────────────"))
-	fmt.Println(theme.Accent.Render("User:"))
-	fmt.Println("  Hello, how are you?")
-	fmt.Println()
-	fmt.Println(theme.Success.Render("Assistant:"))
-	fmt.Println("  I'm doing well, thank you for asking!")
-	fmt.Println(theme.Border.Render("────────────────────────────────────────"))
-	fmt.Println()
-
-	fmt.Println("To use this theme in TUI, run: /themes and select", name)
 }

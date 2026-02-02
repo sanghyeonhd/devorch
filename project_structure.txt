@@ -1,0 +1,699 @@
+.
+├── .claude
+│   └── settings.local.json
+├── .devorch.yml
+├── .DS_Store
+├── .github
+│   └── workflows
+│       └── devorch.yml
+├── .gitignore
+├── AI_OS_FINAL_UPGRADE_REPORT.md
+├── archive
+│   ├── build_artifacts
+│   │   ├── build.sh
+│   │   └── package.sh
+│   ├── reports
+│   │   ├── final_qa_report_20260202_233204.md
+│   │   ├── performance_results_20260202_232825.txt
+│   │   ├── performance_results_20260202_232913.txt
+│   │   ├── security_results_20260202_233027.txt
+│   │   ├── test_export.md
+│   │   ├── test_output.md
+│   │   ├── test_results_20260202_232516.txt
+│   │   └── test_results_20260202_232522.txt
+│   ├── temp_executables
+│   │   ├── devorch-enhanced
+│   │   ├── devorch-final
+│   │   ├── devorch-fixed
+│   │   └── devorch-new
+│   └── test_files
+│       ├── analyze_qa_results.sh
+│       ├── comprehensive_test.sh
+│       ├── run_functional_qa.sh
+│       ├── test_all_commands.sh
+│       ├── test_final_qa.sh
+│       ├── test_google.sh
+│       ├── test_performance_fixed.sh
+│       ├── test_performance.sh
+│       ├── test_providers.sh
+│       ├── test_security.sh
+│       ├── test-integration.txt
+│       └── test.txt
+├── bin
+│   ├── devorch
+│   ├── devorch-darwin-amd64
+│   ├── devorch-darwin-arm64
+│   ├── devorch-linux-amd64
+│   ├── devorch-linux-arm64
+│   ├── devorch-unified
+│   ├── devorch-windows-amd64.exe
+│   ├── devorch-windows-arm64.exe
+│   ├── devorchd
+│   ├── devorchd-darwin-amd64
+│   ├── devorchd-darwin-arm64
+│   ├── devorchd-linux-amd64
+│   ├── devorchd-linux-arm64
+│   ├── devorchd-windows-amd64.exe
+│   └── devorchd-windows-arm64.exe
+├── build
+│   ├── devorch-darwin-amd64
+│   ├── devorch-darwin-arm64
+│   ├── devorch-linux-amd64
+│   ├── devorch-linux-arm64
+│   ├── devorch-windows-amd64.exe
+│   ├── devorch-windows-arm64.exe
+│   └── README.md
+├── BUILD_REPORT.md
+├── cli_final_verification.sh
+├── cmd
+│   ├── .DS_Store
+│   ├── devorch
+│   │   └── main.go
+│   └── devorchd
+│       ├── main.go
+│       └── static
+│           └── index.html
+├── devorch
+├── DEVORCH_AI_OS_DESIGN.md
+├── DEVORCH_AI_OS_UPGRADE_PLAN.md
+├── devorch.db
+├── devorch.db-shm
+├── devorch.db-wal
+├── devorchd
+├── docs
+│   ├── .DS_Store
+│   ├── CLI-Integration-Development-Plan.md
+│   ├── cli-tui-analysis.md
+│   ├── cli-tui-detailed-analysis.md
+│   ├── compare
+│   │   ├── .DS_Store
+│   │   ├── devorch-vs-opencode-analysis.md
+│   │   ├── devorch-vs-opencode-feature-analysis.md
+│   │   ├── oh-my-opencode-설치-동작-분석보고서.md
+│   │   ├── opencode-analysis.md
+│   │   └── productexplain.md
+│   ├── DevOrch_Comprehensive_QA_Document.md
+│   ├── final-cli-tui-comprehensive-analysis.md
+│   ├── opencode-feature-parity-complete.md
+│   ├── phase
+│   │   ├── .DS_Store
+│   │   ├── 33-1phase.md
+│   │   ├── 33-2phase.md
+│   │   ├── phase-summary.md
+│   │   ├── phase.md
+│   │   ├── phase1-implementation-summary.md
+│   │   ├── phase1.md
+│   │   ├── phase10.md
+│   │   ├── phase11.md
+│   │   ├── phase13.md
+│   │   ├── phase14.md
+│   │   ├── phase15.md
+│   │   ├── phase16-1.md
+│   │   ├── phase16.md
+│   │   ├── phase17.md
+│   │   ├── phase18.md
+│   │   ├── phase19.md
+│   │   ├── phase2-implementation-summary.md
+│   │   ├── phase2.md
+│   │   ├── phase20-1.md
+│   │   ├── phase20.md
+│   │   ├── phase21.md
+│   │   ├── phase22.md
+│   │   ├── phase23.md
+│   │   ├── phase24.md
+│   │   ├── phase25.md
+│   │   ├── phase26.md
+│   │   ├── phase27.md
+│   │   ├── phase28.md
+│   │   ├── phase29.md
+│   │   ├── phase3-1.md
+│   │   ├── phase3-2.md
+│   │   ├── phase3-3.md
+│   │   ├── phase3-implementation-summary.md
+│   │   ├── phase3.md
+│   │   ├── phase30.md
+│   │   ├── phase31.md
+│   │   ├── phase32.md
+│   │   ├── phase33.md
+│   │   ├── phase34.md
+│   │   ├── phase35.md
+│   │   ├── phase36.md
+│   │   ├── phase37.md
+│   │   ├── phase38.md
+│   │   ├── phase39.md
+│   │   ├── phase4-implementation-summary.md
+│   │   ├── phase4.md
+│   │   ├── phase40.md
+│   │   ├── phase41.md
+│   │   ├── phase42.md
+│   │   ├── phase43.md
+│   │   ├── phase44.md
+│   │   ├── phase45.md
+│   │   ├── phase49.md
+│   │   ├── phase5.md
+│   │   ├── phase51.md
+│   │   ├── phase53.md
+│   │   ├── phase54.md
+│   │   ├── phase55.md
+│   │   ├── phase56.md
+│   │   ├── phase57.md
+│   │   ├── phase58.md
+│   │   ├── phase6.md
+│   │   ├── phase7.md
+│   │   ├── phase8.md
+│   │   ├── phase9-1.md
+│   │   └── phase9.md
+│   ├── plan
+│   │   ├── .DS_Store
+│   │   ├── command-integration-plan.md
+│   │   ├── development-strategy-v3.md
+│   │   ├── devorch-analysis.md
+│   │   ├── improvement-analysis.md
+│   │   ├── improvement-completion-report.md
+│   │   ├── improvement-plan-v2.md
+│   │   ├── sourcetree.md
+│   │   └── tui-improvement-plan.md
+│   └── qa
+│       ├── provider-model-qa-test.md
+│       ├── qa-analysis-report.md
+│       └── test-completion-report.md
+├── FINAL_QA_REPORT.md
+├── FUNCTIONAL_QA_GUIDE.md
+├── go.mod
+├── go.sum
+├── internal
+│   ├── .DS_Store
+│   ├── agent
+│   │   ├── agent.go
+│   │   ├── builtin.go
+│   │   ├── orchestrator.go
+│   │   └── registry.go
+│   ├── app
+│   │   ├── app.go
+│   │   ├── step11_wiring.go
+│   │   ├── wire_oauth_config.go
+│   │   └── wire.go
+│   ├── attribution
+│   │   ├── analyzer.go
+│   │   ├── envsig.go
+│   │   ├── store.go
+│   │   └── types.go
+│   ├── auth
+│   │   ├── auth.go
+│   │   ├── device_flow.go
+│   │   ├── manager_workspace.go
+│   │   ├── oidc_discovery.go
+│   │   ├── pkce.go
+│   │   ├── providers_build.go
+│   │   ├── providers.go
+│   │   ├── refresh.go
+│   │   ├── state.go
+│   │   ├── store_sqlite.go
+│   │   ├── store.go
+│   │   ├── types.go
+│   │   └── ui.go
+│   ├── authz
+│   │   ├── authorizer_sqlite.go
+│   │   ├── authz.go
+│   │   └── errors.go
+│   ├── autosetup
+│   │   ├── autosetup.go
+│   │   └── detector.go
+│   ├── background
+│   │   ├── congestion.go
+│   │   ├── feedback.go
+│   │   ├── manager.go
+│   │   ├── task_manager.go
+│   │   ├── task_store.go
+│   │   └── types_task.go
+│   ├── bench
+│   │   ├── bench.go
+│   │   ├── cost_model.go
+│   │   ├── eval
+│   │   │   ├── basic_text.go
+│   │   │   ├── eval.go
+│   │   │   ├── patch_apply.go
+│   │   │   ├── registry.go
+│   │   │   └── tests.go
+│   │   ├── quality_eval.go
+│   │   ├── recorder.go
+│   │   ├── reward_model.go
+│   │   └── runner.go
+│   ├── billing
+│   │   └── pricing_table.go
+│   ├── bus
+│   │   ├── hub.go
+│   │   └── sse.go
+│   ├── cli
+│   │   ├── commands.go
+│   │   ├── login.go
+│   │   ├── theme.go
+│   │   └── unified.go
+│   ├── command
+│   │   └── command.go
+│   ├── compaction
+│   │   ├── compaction.go
+│   │   └── engine.go
+│   ├── config
+│   │   ├── apikeys.go
+│   │   ├── config.go
+│   │   ├── jsonc.go
+│   │   ├── load_oauth.go
+│   │   ├── load.go
+│   │   └── oauth.go
+│   ├── core
+│   │   └── core.go
+│   ├── delegate
+│   │   ├── delegate.go
+│   │   ├── router.go
+│   │   └── types.go
+│   ├── diagnostics
+│   │   ├── checks
+│   │   │   ├── config.go
+│   │   │   ├── installation.go
+│   │   │   ├── oauth.go
+│   │   │   ├── performance.go
+│   │   │   ├── router_learning.go
+│   │   │   └── router_sharing.go
+│   │   ├── doctor.go
+│   │   ├── report.go
+│   │   └── run_doctor.go
+│   ├── editor
+│   │   └── editor.go
+│   ├── exec
+│   │   └── runner.go
+│   ├── execution
+│   │   └── engine.go
+│   ├── experiment
+│   │   ├── assignment.go
+│   │   ├── evaluator.go
+│   │   ├── guard.go
+│   │   ├── hashing.go
+│   │   ├── selector.go
+│   │   ├── service.go
+│   │   ├── store.go
+│   │   └── types.go
+│   ├── extension
+│   │   ├── doc.go
+│   │   ├── loader_test.go
+│   │   └── loader.go
+│   ├── global
+│   │   ├── env_fingerprint.go
+│   │   ├── fingerprint.go
+│   │   ├── paths.go
+│   │   └── repo_fingerprint.go
+│   ├── history
+│   │   └── history.go
+│   ├── hook
+│   │   ├── builtins
+│   │   │   ├── comment_checker.go
+│   │   │   ├── logging.go
+│   │   │   ├── on_model_switch.go
+│   │   │   ├── on_quality_gate.go
+│   │   │   ├── on_retry_exhausted.go
+│   │   │   └── on_task_complete.go
+│   │   ├── chain.go
+│   │   ├── events.go
+│   │   ├── hook.go
+│   │   └── registry.go
+│   ├── i18n
+│   │   ├── i18n.go
+│   │   ├── translations_en.go
+│   │   ├── translations_ja.go
+│   │   ├── translations_ko.go
+│   │   └── translations_zh.go
+│   ├── id
+│   │   └── ulid.go
+│   ├── learning
+│   │   ├── ensemble.go
+│   │   ├── features
+│   │   │   └── builder.go
+│   │   ├── feedback.go
+│   │   ├── http
+│   │   │   └── feedback_routes.go
+│   │   ├── metrics.go
+│   │   ├── multi_llm_test.go
+│   │   ├── multi_llm.go
+│   │   ├── recorder.go
+│   │   └── store.go
+│   ├── log
+│   │   └── log.go
+│   ├── lsp
+│   │   ├── client.go
+│   │   ├── lsp.go
+│   │   ├── manager.go
+│   │   ├── operations.go
+│   │   └── types.go
+│   ├── mcp
+│   │   ├── autoconfig_test.go
+│   │   ├── autoconfig.go
+│   │   ├── client.go
+│   │   ├── manager.go
+│   │   ├── transport.go
+│   │   └── types.go
+│   ├── memory
+│   │   └── memory.go
+│   ├── modelresolver
+│   │   ├── config_types.go
+│   │   ├── fallback.go
+│   │   ├── policy.go
+│   │   ├── requirements.go
+│   │   ├── resolve_agent.go
+│   │   ├── resolve.go
+│   │   └── types.go
+│   ├── okaon
+│   │   ├── aggregates.go
+│   │   ├── models.go
+│   │   ├── retention.go
+│   │   ├── sqlite
+│   │   │   ├── arm_query.go
+│   │   │   ├── arm_upsert.go
+│   │   │   ├── insert.go
+│   │   │   ├── query_arm_stats.go
+│   │   │   ├── query_runs.go
+│   │   │   ├── query.go
+│   │   │   ├── retention.go
+│   │   │   ├── stats.go
+│   │   │   ├── store.go
+│   │   │   └── vacuum.go
+│   │   └── store.go
+│   ├── orchestrator
+│   │   ├── brain.go
+│   │   ├── decision_engine.go
+│   │   ├── progress_tracker.go
+│   │   ├── task_queue.go
+│   │   └── tier_manager.go
+│   ├── permission
+│   │   └── permission.go
+│   ├── platform
+│   │   └── detect
+│   │       ├── arch.go
+│   │       ├── features.go
+│   │       └── os.go
+│   ├── plugin
+│   │   ├── builtins.go
+│   │   ├── manager.go
+│   │   └── plugin.go
+│   ├── provider
+│   │   ├── anthropic
+│   │   │   ├── anthropic.go
+│   │   │   ├── chat.go
+│   │   │   └── stream.go
+│   │   ├── auth_errors.go
+│   │   ├── azure
+│   │   │   └── azure.go
+│   │   ├── bedrock
+│   │   │   └── bedrock.go
+│   │   ├── cohere
+│   │   │   └── cohere.go
+│   │   ├── copilot
+│   │   │   └── copilot.go
+│   │   ├── errors.go
+│   │   ├── gitlab
+│   │   │   └── gitlab.go
+│   │   ├── google
+│   │   │   ├── chat.go
+│   │   │   └── google.go
+│   │   ├── groq
+│   │   │   └── groq.go
+│   │   ├── httpx
+│   │   │   └── sse.go
+│   │   ├── instrument
+│   │   │   ├── instrument.go
+│   │   │   └── scenario.go
+│   │   ├── local
+│   │   │   ├── detect.go
+│   │   │   ├── installer.go
+│   │   │   ├── inventory.go
+│   │   │   ├── manifest_reader.go
+│   │   │   └── runtime_limits.go
+│   │   ├── mistral
+│   │   │   └── mistral.go
+│   │   ├── observer
+│   │   │   ├── bench_recorder.go
+│   │   │   ├── chain.go
+│   │   │   └── observer.go
+│   │   ├── ollama
+│   │   │   ├── health.go
+│   │   │   ├── ollama.go
+│   │   │   ├── pull.go
+│   │   │   ├── serve.go
+│   │   │   └── tags_chat.go
+│   │   ├── openai
+│   │   │   ├── chat.go
+│   │   │   ├── openai.go
+│   │   │   └── stream.go
+│   │   ├── openai_compat
+│   │   │   └── client.go
+│   │   ├── openrouter
+│   │   │   └── openrouter.go
+│   │   ├── perplexity
+│   │   │   └── perplexity.go
+│   │   ├── pool
+│   │   │   ├── decay.go
+│   │   │   ├── pool.go
+│   │   │   └── reliability.go
+│   │   ├── provider.go
+│   │   ├── registry_auth.go
+│   │   ├── registry.go
+│   │   ├── streaming
+│   │   │   ├── collector.go
+│   │   │   ├── stream.go
+│   │   │   └── wrap.go
+│   │   ├── together
+│   │   │   └── together.go
+│   │   └── xai
+│   │       └── xai.go
+│   ├── proxy
+│   │   └── manager.go
+│   ├── pty
+│   │   ├── model.go
+│   │   └── pty.go
+│   ├── quality
+│   │   ├── evaluator_v2.go
+│   │   ├── evaluator.go
+│   │   ├── recorder.go
+│   │   ├── signals_adapter.go
+│   │   ├── signals.go
+│   │   └── types.go
+│   ├── router
+│   │   ├── auto_update.go
+│   │   ├── bandit.go
+│   │   ├── bench_router.go
+│   │   ├── bench_scorer.go
+│   │   ├── bestarm_cache.go
+│   │   ├── coldstart.go
+│   │   ├── drift
+│   │   │   ├── config.go
+│   │   │   ├── detector.go
+│   │   │   ├── stats.go
+│   │   │   └── store.go
+│   │   ├── enrich_okaon.go
+│   │   ├── explain.go
+│   │   ├── http
+│   │   │   └── router_routes.go
+│   │   ├── learner
+│   │   │   ├── decay.go
+│   │   │   ├── features.go
+│   │   │   ├── learner.go
+│   │   │   ├── scoring.go
+│   │   │   └── trainer.go
+│   │   ├── learning_adapter.go
+│   │   ├── learning.go
+│   │   ├── policy_runtime.go
+│   │   ├── policy_store.go
+│   │   ├── policy.go
+│   │   ├── reliability.go
+│   │   ├── reward_adjust.go
+│   │   ├── rollback
+│   │   │   ├── rollback.go
+│   │   │   └── snapshot_store.go
+│   │   ├── router.go
+│   │   ├── scope
+│   │   │   ├── privacy.go
+│   │   │   ├── resolve_scope.go
+│   │   │   └── scope.go
+│   │   ├── score.go
+│   │   ├── scoring_v2.go
+│   │   ├── select_router.go
+│   │   ├── share
+│   │   │   ├── exporter.go
+│   │   │   ├── importer.go
+│   │   │   └── signer.go
+│   │   ├── types.go
+│   │   └── weights.go
+│   ├── runtime
+│   │   └── version
+│   │       ├── detector.go
+│   │       └── types.go
+│   ├── server
+│   │   ├── middleware
+│   │   │   ├── auth.go
+│   │   │   └── workspace.go
+│   │   ├── routes
+│   │   │   ├── acp.go
+│   │   │   ├── chat.go
+│   │   │   ├── health.go
+│   │   │   ├── learning.go
+│   │   │   ├── provider_proxy.go
+│   │   │   ├── providers.go
+│   │   │   ├── register.go
+│   │   │   ├── stream.go
+│   │   │   ├── tasks.go
+│   │   │   ├── tools.go
+│   │   │   └── websocket.go
+│   │   └── server.go
+│   ├── session
+│   │   ├── events.go
+│   │   ├── llm_call.go
+│   │   ├── manager.go
+│   │   ├── processor.go
+│   │   ├── session.go
+│   │   ├── store.go
+│   │   └── stream.go
+│   ├── shell
+│   │   └── shell.go
+│   ├── signal
+│   │   ├── exec_runner.go
+│   │   ├── test_runner_os.go
+│   │   ├── test_runner.go
+│   │   ├── tool_observer.go
+│   │   └── types.go
+│   ├── storage
+│   │   └── sqlite
+│   │       ├── auth_sessions.go
+│   │       ├── bench.go
+│   │       ├── benchmarks.go
+│   │       ├── boot.go
+│   │       ├── feedback.go
+│   │       ├── migrations
+│   │       │   ├── 0001_init.sql
+│   │       │   ├── 0002_usage.sql
+│   │       │   ├── 0003_okaon.sql
+│   │       │   ├── 0004_local_runtime.sql
+│   │       │   ├── 0005_auth_tokens.sql
+│   │       │   ├── 0006_bench.sql
+│   │       │   ├── 0007_quality.sql
+│   │       │   ├── 0008_toolruns.sql
+│   │       │   ├── 0009_testruns.sql
+│   │       │   ├── 0010_auth_sessions.sql
+│   │       │   ├── 0011_toolruns_meta.sql
+│   │       │   ├── 0012_model_stats.sql
+│   │       │   ├── 0013_benchmarks.sql
+│   │       │   ├── 0014_feedback.sql
+│   │       │   ├── 0015_router_policy.sql
+│   │       │   ├── 0016_router_policy_scope.sql
+│   │       │   ├── 0017_attribution.sql
+│   │       │   ├── 0018_router_drift_rollback.sql
+│   │       │   ├── 0019_experiments.sql
+│   │       │   ├── 0020_okAON_learning.sql
+│   │       │   ├── 0021_okAON_runs_arms.sql
+│   │       │   └── 0022_hw_repo_task_eval.sql
+│   │       ├── model_stats.go
+│   │       ├── quality.go
+│   │       ├── sqlite.go
+│   │       ├── testruns.go
+│   │       └── toolruns.go
+│   ├── tenancy
+│   │   ├── store.go
+│   │   └── workspace.go
+│   ├── tool
+│   │   ├── builtin
+│   │   │   ├── agent.go
+│   │   │   ├── bash.go
+│   │   │   ├── batch.go
+│   │   │   ├── builtin.go
+│   │   │   ├── codesearch.go
+│   │   │   ├── diagnostics.go
+│   │   │   ├── edit.go
+│   │   │   ├── fetch.go
+│   │   │   ├── glob.go
+│   │   │   ├── grep.go
+│   │   │   ├── ls.go
+│   │   │   ├── lsp.go
+│   │   │   ├── multiedit.go
+│   │   │   ├── patch.go
+│   │   │   ├── plan.go
+│   │   │   ├── question.go
+│   │   │   ├── read.go
+│   │   │   ├── skill.go
+│   │   │   ├── sourcegraph.go
+│   │   │   ├── task.go
+│   │   │   ├── todo.go
+│   │   │   ├── view.go
+│   │   │   ├── webfetch.go
+│   │   │   ├── websearch.go
+│   │   │   └── write.go
+│   │   ├── context.go
+│   │   ├── errors.go
+│   │   ├── registry.go
+│   │   ├── resultmeta.go
+│   │   ├── truncation.go
+│   │   └── types.go
+│   ├── tools
+│   │   ├── filewriter.go
+│   │   ├── multiedit.go
+│   │   ├── systemtools.go
+│   │   ├── tasksystem.go
+│   │   └── webtools.go
+│   └── websocket
+│       └── server.go
+├── learning
+│   ├── .DS_Store
+│   ├── bandit
+│   │   ├── bandit.go
+│   │   ├── dist.go
+│   │   └── thompson.go
+│   ├── learner.go
+│   ├── mock_store.go
+│   ├── regression
+│   │   ├── model.go
+│   │   └── trainer.go
+│   └── thompson_sampling.go
+├── PHASE1_IMPLEMENTATION_COMPLETE.md
+├── pkg
+│   └── sdk
+│       └── client_auth.go
+├── platform
+│   ├── .DS_Store
+│   ├── detect
+│   │   ├── cpu_mem.go
+│   │   ├── env_fingerprint.go
+│   │   ├── gpu_darwin.go
+│   │   ├── gpu_generic.go
+│   │   ├── gpu_linux.go
+│   │   ├── gpu_windows.go
+│   │   ├── hw_profile_darwin.go
+│   │   ├── hw_profile_generic.go
+│   │   ├── hw_profile_linux.go
+│   │   ├── hw_profile_windows.go
+│   │   ├── hw_profile.go
+│   │   └── profile.go
+│   └── tokenstore
+│       ├── secure_stub.go
+│       └── tokenstore.go
+├── project_structure.txt
+├── Project.md
+├── README.md
+├── release
+│   ├── devorch-v0.1.0-Linux-ARM64.tar.gz
+│   ├── devorch-v0.1.0-Linux-x64.tar.gz
+│   ├── devorch-v0.1.0-macOS-AppleSilicon.tar.gz
+│   ├── devorch-v0.1.0-macOS-Intel.tar.gz
+│   ├── devorch-v0.1.0-Windows-ARM64.zip
+│   └── devorch-v0.1.0-Windows-x64.zip
+├── runtime
+│   └── llm
+│       └── models
+│           ├── manifest.json
+│           └── profiles
+│               ├── high.json
+│               ├── low_end.json
+│               └── mid.json
+├── setup-api-keys.sh
+├── test_all_cli_commands.sh
+├── test_cli_integration.sh
+├── TIER_SYSTEM_UPGRADE_REPORT.md
+└── WORKSPACE_CLEANUP_REPORT.md
+
+128 directories, 569 files

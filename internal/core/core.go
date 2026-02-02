@@ -1,5 +1,5 @@
 // Package core provides the unified core system for DevOrch
-// This serves as the foundation for all UI interfaces (CLI/TUI/WebUI)
+// This serves as the foundation for all UI interfaces (CLI/Terminal)
 package core
 
 import (
@@ -8,14 +8,20 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"devorch/internal/agent"
+	"devorch/internal/authz"
+	"devorch/internal/background"
 	"devorch/internal/compaction"
 	"devorch/internal/config"
+	"devorch/internal/diagnostics"
 	"devorch/internal/execution"
+	"devorch/internal/memory"
 	"devorch/internal/okaon"
 	"devorch/internal/proxy"
 	"devorch/internal/session"
+	"devorch/internal/storage/sqlite"
 	"devorch/internal/tool"
 	"devorch/internal/tool/builtin"
 	"devorch/internal/websocket"
@@ -28,6 +34,7 @@ type DevOrchCore struct {
 	SessionManager *session.Manager
 	ToolRegistry   *tool.Registry
 	Config         *config.Config
+	APIKeyManager  *config.APIKeyManager
 
 	// Agent orchestration
 	AgentRegistry *agent.Registry
@@ -41,6 +48,18 @@ type DevOrchCore struct {
 	ExecutionEngine  *execution.Engine
 	CompactionEngine *compaction.Engine
 	ProxyManager     *proxy.Manager
+
+	// Memory management
+	ProjectMemory *memory.Memory
+
+	// Authorization system
+	Authorizer authz.Authorizer
+
+	// Background Task Management
+	BackgroundManager *background.Manager
+
+	// Diagnostics Doctor
+	DiagnosticsDoctor *diagnostics.Doctor
 
 	// State management
 	mu            sync.RWMutex
@@ -88,6 +107,12 @@ func (c *DevOrchCore) initializeManagers(coreConfig CoreConfig) error {
 	}
 	c.Config = &cfg
 
+	// 1.5. API Key Manager
+	c.APIKeyManager = config.NewAPIKeyManager()
+	if err := c.APIKeyManager.LoadKeys(); err != nil {
+		return fmt.Errorf("failed to initialize API key manager: %w", err)
+	}
+
 	// 2. Session Manager
 	c.SessionManager, err = session.NewManager(coreConfig.SessionStorePath)
 	if err != nil {
@@ -122,6 +147,25 @@ func (c *DevOrchCore) initializeManagers(coreConfig CoreConfig) error {
 	if err := c.loadBuiltinTools(coreConfig); err != nil {
 		return fmt.Errorf("failed to load builtin tools: %w", err)
 	}
+
+	// 5.5. Initialize Memory System
+	if err := c.initializeMemorySystem(); err != nil {
+		return fmt.Errorf("failed to initialize memory system: %w", err)
+	}
+
+	// 5.7. Initialize Authorization System
+	if err := c.initializeAuthzSystem(); err != nil {
+		return fmt.Errorf("failed to initialize authorization system: %w", err)
+	}
+
+	// 5.8. Initialize Background Manager
+	c.BackgroundManager = background.NewManager(nil, 4)
+	if err := c.BackgroundManager.Start(c.ctx); err != nil {
+		return fmt.Errorf("failed to start background manager: %w", err)
+	}
+
+	// 5.9. Initialize Diagnostics Doctor
+	c.DiagnosticsDoctor = diagnostics.NewDoctor(nil)
 
 	// 6. Initialize Phase 4 Services
 	if err := c.initializePhase4Services(coreConfig); err != nil {
@@ -158,6 +202,21 @@ func (c *DevOrchCore) GetToolRegistry() *tool.Registry {
 // GetConfig returns the config
 func (c *DevOrchCore) GetConfig() *config.Config {
 	return c.Config
+}
+
+// GetAPIKeyManager returns the API key manager
+func (c *DevOrchCore) GetAPIKeyManager() *config.APIKeyManager {
+	return c.APIKeyManager
+}
+
+// GetMemory returns the project memory system
+func (c *DevOrchCore) GetMemory() *memory.Memory {
+	return c.ProjectMemory
+}
+
+// GetAuthorizer returns the authorization system
+func (c *DevOrchCore) GetAuthorizer() authz.Authorizer {
+	return c.Authorizer
 }
 
 // Shutdown gracefully shuts down the core
@@ -333,4 +392,44 @@ func (c *DevOrchCore) GetCompactionEngine() *compaction.Engine {
 // GetProxyManager returns the proxy manager
 func (c *DevOrchCore) GetProxyManager() *proxy.Manager {
 	return c.ProxyManager
+}
+
+// initializeMemorySystem initializes the memory system
+func (c *DevOrchCore) initializeMemorySystem() error {
+	// Get current working directory
+	workDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	// Load or create memory
+	mem, err := memory.Load(workDir)
+	if err != nil {
+		return fmt.Errorf("failed to load memory: %w", err)
+	}
+
+	c.ProjectMemory = mem
+	return nil
+}
+
+// initializeAuthzSystem initializes the authorization system
+func (c *DevOrchCore) initializeAuthzSystem() error {
+	// Create mock session lookup for SQLite authorizer
+	// In production, this would use actual SQLite session storage
+	mockLookup := &mockSessionLookup{}
+	c.Authorizer = authz.NewSQLiteAuthorizer(mockLookup)
+	return nil
+}
+
+// mockSessionLookup implements authz.SessionLookup for demonstration
+type mockSessionLookup struct{}
+
+func (m *mockSessionLookup) FindByBearer(ctx context.Context, bearer string) (*sqlite.AuthSession, error) {
+	// Mock implementation - in production, this would query SQLite
+	return nil, authz.ErrUnauthorized
+}
+
+func (m *mockSessionLookup) DeleteExpired(ctx context.Context, now time.Time) (int64, error) {
+	// Mock implementation - return that 0 sessions were deleted
+	return 0, nil
 }
