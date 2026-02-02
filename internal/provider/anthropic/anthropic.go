@@ -2,7 +2,9 @@ package anthropic
 
 import (
 	"context"
+	"os"
 
+	"devorch/internal/auth"
 	"devorch/internal/provider"
 	"devorch/internal/provider/openai_compat"
 )
@@ -14,10 +16,24 @@ type Provider struct {
 
 // New creates a new Anthropic provider
 func New() *Provider {
+	// Get API key from auth store first, fallback to environment variable
+	var apiKey string
+	store := auth.GetStore()
+	if authInfo := store.Get("anthropic"); authInfo != nil {
+		// OAuth token takes precedence over API key
+		if authInfo.AccessToken != "" {
+			apiKey = authInfo.AccessToken
+		} else if authInfo.APIKey != "" {
+			apiKey = authInfo.APIKey
+		}
+	} else {
+		apiKey = os.Getenv("ANTHROPIC_API_KEY")
+	}
+
 	return &Provider{
 		c: openai_compat.New(
 			"https://api.anthropic.com/v1",
-			"", // API key from ANTHROPIC_API_KEY env
+			apiKey,
 			map[string]string{
 				"anthropic-version": "2023-06-01",
 			},

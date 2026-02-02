@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 
+	"devorch/internal/auth"
 	"devorch/internal/provider"
 	"devorch/internal/provider/openai_compat"
 )
@@ -14,12 +15,22 @@ type Provider struct {
 }
 
 // New creates a new GitHub Copilot provider
-// Reads token from COPILOT_TOKEN or GITHUB_TOKEN environment variable
+// Reads token from auth store first, then fallback to environment variables
 func New() *Provider {
-	token := os.Getenv("COPILOT_TOKEN")
-	if token == "" {
-		token = os.Getenv("GITHUB_TOKEN")
+	var token string
+
+	// Try auth store first
+	store := auth.GetStore()
+	if authInfo := store.Get("github-copilot"); authInfo != nil && authInfo.AccessToken != "" {
+		token = authInfo.AccessToken
+	} else {
+		// Fallback to environment variables
+		token = os.Getenv("COPILOT_TOKEN")
+		if token == "" {
+			token = os.Getenv("GITHUB_TOKEN")
+		}
 	}
+
 	return &Provider{
 		c: openai_compat.New(
 			"https://api.githubcopilot.com",

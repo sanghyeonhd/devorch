@@ -3,6 +3,7 @@ package tool
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"devorch/internal/signal"
@@ -25,12 +26,78 @@ type Registry struct {
 	Observer *signal.ToolObserver
 }
 
-// NewRegistry creates a new tool registry
-func NewRegistry() *Registry {
-	return &Registry{
+// RegistryOption is a function that configures a Registry
+type RegistryOption func(*Registry) error
+
+// WithAuthzManager sets the authorization manager
+func WithAuthzManager(authz interface{}) RegistryOption {
+	return func(r *Registry) error {
+		// For now, just store it in a field we'll add
+		// TODO: Implement authz integration
+		return nil
+	}
+}
+
+// WithPluginPaths sets the plugin paths
+func WithPluginPaths(paths []string) RegistryOption {
+	return func(r *Registry) error {
+		// TODO: Implement plugin loading
+		return nil
+	}
+}
+
+// NewRegistry creates a new tool registry with options
+func NewRegistry(options ...RegistryOption) (*Registry, error) {
+	r := &Registry{
 		tools:       map[string]Tool{},
 		legacyTools: map[string]LegacyTool{},
 	}
+
+	for _, option := range options {
+		if err := option(r); err != nil {
+			return nil, err
+		}
+	}
+
+	return r, nil
+}
+
+// NewRegistrySimple creates a new tool registry (backward compatible)
+func NewRegistrySimple() *Registry {
+	r, _ := NewRegistry()
+	return r
+}
+
+// ListTools returns all registered tool names
+func (r *Registry) ListTools() []string {
+	return r.Names()
+}
+
+// GetToolInfo returns information about a specific tool
+func (r *Registry) GetToolInfo(name string) (*ToolInfo, error) {
+	if t, ok := r.tools[name]; ok {
+		info := t.Info()
+		return &info, nil
+	}
+
+	if _, ok := r.legacyTools[name]; ok {
+		// Return basic info for legacy tools
+		info := ToolInfo{
+			Name:        name,
+			Description: "Legacy tool",
+			Category:    "legacy",
+			Version:     "1.0.0",
+		}
+		return &info, nil
+	}
+
+	return nil, fmt.Errorf("tool not found: %s", name)
+}
+
+// Shutdown shuts down the registry
+func (r *Registry) Shutdown() error {
+	// TODO: Implement graceful shutdown
+	return nil
 }
 
 // Register registers a new-style tool

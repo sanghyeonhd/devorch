@@ -220,32 +220,76 @@ func GetModelsForProvider(providerName string) []ModelInfo {
 		return []ModelInfo{
 			{ID: "claude-sonnet-4-20250514", Name: "Claude Sonnet 4", Provider: "anthropic", Description: "Latest Claude model", IsPrimary: true},
 			{ID: "claude-3-5-haiku-20241022", Name: "Claude 3.5 Haiku", Provider: "anthropic", Description: "Fast and efficient"},
+			{ID: "claude-3-5-sonnet-20241022", Name: "Claude 3.5 Sonnet", Provider: "anthropic", Description: "Balanced performance"},
 			{ID: "claude-3-opus-20240229", Name: "Claude 3 Opus", Provider: "anthropic", Description: "Most capable"},
+			{ID: "claude-3-haiku-20240307", Name: "Claude 3 Haiku", Provider: "anthropic", Description: "Fastest option"},
 		}
 	case "openai":
 		return []ModelInfo{
 			{ID: "gpt-4o", Name: "GPT-4o", Provider: "openai", Description: "Latest GPT-4", IsPrimary: true},
 			{ID: "gpt-4o-mini", Name: "GPT-4o Mini", Provider: "openai", Description: "Fast and affordable"},
 			{ID: "gpt-4-turbo", Name: "GPT-4 Turbo", Provider: "openai", Description: "Previous generation"},
+			{ID: "gpt-4", Name: "GPT-4", Provider: "openai", Description: "Standard GPT-4"},
 			{ID: "o1", Name: "o1", Provider: "openai", Description: "Reasoning model"},
+			{ID: "o1-mini", Name: "o1 Mini", Provider: "openai", Description: "Faster reasoning"},
+			{ID: "gpt-3.5-turbo", Name: "GPT-3.5 Turbo", Provider: "openai", Description: "Fast and economical"},
 		}
 	case "google":
 		return []ModelInfo{
 			{ID: "gemini-2.0-flash", Name: "Gemini 2.0 Flash", Provider: "google", Description: "Fast multimodal", IsPrimary: true},
 			{ID: "gemini-1.5-pro", Name: "Gemini 1.5 Pro", Provider: "google", Description: "High capability"},
 			{ID: "gemini-1.5-flash", Name: "Gemini 1.5 Flash", Provider: "google", Description: "Fast responses"},
+			{ID: "gemini-1.0-pro", Name: "Gemini 1.0 Pro", Provider: "google", Description: "Standard model"},
 		}
 	case "openrouter":
 		return []ModelInfo{
 			{ID: "anthropic/claude-sonnet-4", Name: "Claude Sonnet 4", Provider: "openrouter", IsPrimary: true},
+			{ID: "anthropic/claude-3-5-sonnet", Name: "Claude 3.5 Sonnet", Provider: "openrouter"},
 			{ID: "openai/gpt-4o", Name: "GPT-4o", Provider: "openrouter"},
 			{ID: "google/gemini-2.0-flash", Name: "Gemini 2.0 Flash", Provider: "openrouter"},
 			{ID: "meta-llama/llama-3.3-70b", Name: "Llama 3.3 70B", Provider: "openrouter"},
+			{ID: "mistralai/mistral-large", Name: "Mistral Large", Provider: "openrouter"},
+			{ID: "deepseek/deepseek-v3", Name: "DeepSeek V3", Provider: "openrouter"},
+			{ID: "cohere/command-r-plus", Name: "Command R+", Provider: "openrouter"},
 		}
 	case "groq":
 		return []ModelInfo{
 			{ID: "llama-3.3-70b-versatile", Name: "Llama 3.3 70B", Provider: "groq", IsPrimary: true},
+			{ID: "llama-3.1-8b-instant", Name: "Llama 3.1 8B", Provider: "groq"},
 			{ID: "mixtral-8x7b-32768", Name: "Mixtral 8x7B", Provider: "groq"},
+			{ID: "gemma2-9b-it", Name: "Gemma 2 9B", Provider: "groq"},
+		}
+	case "github-copilot":
+		return []ModelInfo{
+			{ID: "gpt-4o", Name: "GPT-4o", Provider: "github-copilot", Description: "Latest GPT-4 via GitHub", IsPrimary: true},
+			{ID: "gpt-4", Name: "GPT-4", Provider: "github-copilot", Description: "Standard GPT-4"},
+			{ID: "gpt-3.5-turbo", Name: "GPT-3.5 Turbo", Provider: "github-copilot", Description: "Fast and efficient"},
+		}
+	case "deepseek":
+		return []ModelInfo{
+			{ID: "deepseek-chat", Name: "DeepSeek Chat", Provider: "deepseek", IsPrimary: true},
+			{ID: "deepseek-coder", Name: "DeepSeek Coder", Provider: "deepseek"},
+		}
+	case "mistral":
+		return []ModelInfo{
+			{ID: "mistral-large-latest", Name: "Mistral Large", Provider: "mistral", IsPrimary: true},
+			{ID: "mistral-medium-latest", Name: "Mistral Medium", Provider: "mistral"},
+			{ID: "mistral-small-latest", Name: "Mistral Small", Provider: "mistral"},
+		}
+	case "cohere":
+		return []ModelInfo{
+			{ID: "command-r-plus", Name: "Command R+", Provider: "cohere", IsPrimary: true},
+			{ID: "command-r", Name: "Command R", Provider: "cohere"},
+		}
+	case "perplexity":
+		return []ModelInfo{
+			{ID: "llama-3.1-sonar-large-128k-online", Name: "Sonar Large Online", Provider: "perplexity", IsPrimary: true},
+			{ID: "llama-3.1-sonar-small-128k-online", Name: "Sonar Small Online", Provider: "perplexity"},
+		}
+	case "together":
+		return []ModelInfo{
+			{ID: "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo", Name: "Llama 3.1 70B", Provider: "together", IsPrimary: true},
+			{ID: "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", Name: "Llama 3.1 8B", Provider: "together"},
 		}
 	default:
 		return nil
@@ -677,6 +721,21 @@ type AnthropicClient struct {
 
 // NewAnthropicClient creates a new Anthropic client
 func NewAnthropicClient() *AnthropicClient {
+	// First try auth store (OAuth), then fallback to environment variable
+	store := auth.GetStore()
+	authInfo := store.Get("anthropic")
+	if authInfo != nil {
+		// OAuth token takes precedence over API key
+		if authInfo.AccessToken != "" {
+			return &AnthropicClient{
+				apiKey: authInfo.AccessToken,
+			}
+		} else if authInfo.APIKey != "" {
+			return &AnthropicClient{
+				apiKey: authInfo.APIKey,
+			}
+		}
+	}
 	return &AnthropicClient{
 		apiKey: os.Getenv("ANTHROPIC_API_KEY"),
 	}
@@ -758,6 +817,98 @@ func (c *AnthropicClient) Chat(ctx context.Context, model string, messages []Mes
 	return "", fmt.Errorf("empty response from anthropic")
 }
 
+// ChatStream sends a streaming chat request to Anthropic
+func (c *AnthropicClient) ChatStream(ctx context.Context, model string, messages []Message, onChunk func(string)) error {
+	if c.apiKey == "" {
+		return fmt.Errorf("ANTHROPIC_API_KEY not set")
+	}
+
+	type anthropicMessage struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+
+	type chatRequest struct {
+		Model     string             `json:"model"`
+		MaxTokens int                `json:"max_tokens"`
+		Messages  []anthropicMessage `json:"messages"`
+		Stream    bool               `json:"stream"`
+	}
+
+	var anthropicMsgs []anthropicMessage
+	for _, m := range messages {
+		if m.Role == "system" {
+			continue // Anthropic handles system differently
+		}
+		anthropicMsgs = append(anthropicMsgs, anthropicMessage{
+			Role:    m.Role,
+			Content: m.Content,
+		})
+	}
+
+	reqBody := chatRequest{
+		Model:     model,
+		MaxTokens: 4096,
+		Messages:  anthropicMsgs,
+		Stream:    true,
+	}
+
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", c.apiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("Accept", "text/event-stream")
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("anthropic request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("anthropic returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "data: ") {
+			data := strings.TrimPrefix(line, "data: ")
+			if data == "[DONE]" {
+				break
+			}
+
+			var chunk struct {
+				Type  string `json:"type"`
+				Delta struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"delta"`
+			}
+
+			if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+				continue
+			}
+
+			if chunk.Type == "content_block_delta" && chunk.Delta.Type == "text_delta" {
+				onChunk(chunk.Delta.Text)
+			}
+		}
+	}
+
+	return scanner.Err()
+}
+
 // OpenAIClient handles OpenAI API calls
 type OpenAIClient struct {
 	apiKey  string
@@ -770,8 +921,24 @@ func NewOpenAIClient() *OpenAIClient {
 	if baseURL == "" {
 		baseURL = "https://api.openai.com/v1"
 	}
+
+	// First try auth store (OAuth), then fallback to environment variable
+	store := auth.GetStore()
+	authInfo := store.Get("openai")
+	apiKey := ""
+	if authInfo != nil {
+		// OAuth token takes precedence over API key
+		if authInfo.AccessToken != "" {
+			apiKey = authInfo.AccessToken
+		} else if authInfo.APIKey != "" {
+			apiKey = authInfo.APIKey
+		}
+	} else {
+		apiKey = os.Getenv("OPENAI_API_KEY")
+	}
+
 	return &OpenAIClient{
-		apiKey:  os.Getenv("OPENAI_API_KEY"),
+		apiKey:  apiKey,
 		baseURL: baseURL,
 	}
 }
@@ -847,6 +1014,95 @@ func (c *OpenAIClient) Chat(ctx context.Context, model string, messages []Messag
 	return "", fmt.Errorf("empty response from openai")
 }
 
+// ChatStream sends a streaming chat request to OpenAI
+func (c *OpenAIClient) ChatStream(ctx context.Context, model string, messages []Message, onChunk func(string)) error {
+	if c.apiKey == "" {
+		return fmt.Errorf("OPENAI_API_KEY not set")
+	}
+
+	type openaiMessage struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+
+	type chatRequest struct {
+		Model    string          `json:"model"`
+		Messages []openaiMessage `json:"messages"`
+		Stream   bool            `json:"stream"`
+	}
+
+	var openaiMsgs []openaiMessage
+	for _, m := range messages {
+		openaiMsgs = append(openaiMsgs, openaiMessage{
+			Role:    m.Role,
+			Content: m.Content,
+		})
+	}
+
+	reqBody := chatRequest{
+		Model:    model,
+		Messages: openaiMsgs,
+		Stream:   true,
+	}
+
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/completions", bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Accept", "text/event-stream")
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("openai request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("openai returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "data: ") {
+			data := strings.TrimPrefix(line, "data: ")
+			if data == "[DONE]" {
+				break
+			}
+
+			var chunk struct {
+				Choices []struct {
+					Delta struct {
+						Content string `json:"content"`
+					} `json:"delta"`
+				} `json:"choices"`
+			}
+
+			if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+				continue
+			}
+
+			if len(chunk.Choices) > 0 {
+				content := chunk.Choices[0].Delta.Content
+				if content != "" {
+					onChunk(content)
+				}
+			}
+		}
+	}
+
+	return scanner.Err()
+}
+
 // GoogleClient handles Google AI API calls
 type GoogleClient struct {
 	apiKey string
@@ -854,8 +1110,18 @@ type GoogleClient struct {
 
 // NewGoogleClient creates a new Google AI client
 func NewGoogleClient() *GoogleClient {
+	// First try auth store, then fallback to environment variable
+	store := auth.GetStore()
+	authInfo := store.Get("google")
+	apiKey := ""
+	if authInfo != nil && authInfo.APIKey != "" {
+		apiKey = authInfo.APIKey
+	} else {
+		apiKey = os.Getenv("GOOGLE_API_KEY")
+	}
+
 	return &GoogleClient{
-		apiKey: os.Getenv("GOOGLE_API_KEY"),
+		apiKey: apiKey,
 	}
 }
 
@@ -937,6 +1203,27 @@ func (c *GoogleClient) Chat(ctx context.Context, model string, messages []Messag
 	return "", fmt.Errorf("empty response from google")
 }
 
+// ChatStream sends a streaming chat request to Google AI (fallback to non-streaming)
+func (c *GoogleClient) ChatStream(ctx context.Context, model string, messages []Message, onChunk func(string)) error {
+	// Google AI doesn't support streaming in this simple implementation
+	// Fall back to regular chat and stream the result word by word
+	response, err := c.Chat(ctx, model, messages)
+	if err != nil {
+		return err
+	}
+
+	// Simulate streaming by sending words one by one
+	words := strings.Fields(response)
+	for i, word := range words {
+		if i > 0 {
+			onChunk(" ")
+		}
+		onChunk(word)
+		time.Sleep(30 * time.Millisecond) // Small delay for streaming effect
+	}
+	return nil
+}
+
 // OpenRouterClient handles OpenRouter API calls (uses OpenAI-compatible API)
 type OpenRouterClient struct {
 	apiKey string
@@ -944,8 +1231,18 @@ type OpenRouterClient struct {
 
 // NewOpenRouterClient creates a new OpenRouter client
 func NewOpenRouterClient() *OpenRouterClient {
+	// First try auth store, then fallback to environment variable
+	store := auth.GetStore()
+	authInfo := store.Get("openrouter")
+	apiKey := ""
+	if authInfo != nil && authInfo.AccessToken != "" {
+		apiKey = authInfo.AccessToken
+	} else {
+		apiKey = os.Getenv("OPENROUTER_API_KEY")
+	}
+
 	return &OpenRouterClient{
-		apiKey: os.Getenv("OPENROUTER_API_KEY"),
+		apiKey: apiKey,
 	}
 }
 
@@ -1021,6 +1318,26 @@ func (c *OpenRouterClient) Chat(ctx context.Context, model string, messages []Me
 	return "", fmt.Errorf("empty response from openrouter")
 }
 
+// ChatStream sends a streaming chat request to OpenRouter (fallback to non-streaming)
+func (c *OpenRouterClient) ChatStream(ctx context.Context, model string, messages []Message, onChunk func(string)) error {
+	// OpenRouter support streaming but for simplicity, fallback to regular chat
+	response, err := c.Chat(ctx, model, messages)
+	if err != nil {
+		return err
+	}
+
+	// Simulate streaming by sending words one by one
+	words := strings.Fields(response)
+	for i, word := range words {
+		if i > 0 {
+			onChunk(" ")
+		}
+		onChunk(word)
+		time.Sleep(30 * time.Millisecond) // Small delay for streaming effect
+	}
+	return nil
+}
+
 // GroqClient handles Groq API calls (uses OpenAI-compatible API)
 type GroqClient struct {
 	apiKey string
@@ -1028,9 +1345,205 @@ type GroqClient struct {
 
 // NewGroqClient creates a new Groq client
 func NewGroqClient() *GroqClient {
-	return &GroqClient{
-		apiKey: os.Getenv("GROQ_API_KEY"),
+	// First try auth store, then fallback to environment variable
+	store := auth.GetStore()
+	authInfo := store.Get("groq")
+	apiKey := ""
+	if authInfo != nil && authInfo.AccessToken != "" {
+		apiKey = authInfo.AccessToken
+	} else {
+		apiKey = os.Getenv("GROQ_API_KEY")
 	}
+
+	return &GroqClient{
+		apiKey: apiKey,
+	}
+}
+
+// GitHubCopilotClient handles GitHub Copilot API calls (OpenAI-compatible)
+type GitHubCopilotClient struct {
+	apiKey  string
+	baseURL string
+}
+
+// NewGitHubCopilotClient creates a new GitHub Copilot client
+func NewGitHubCopilotClient() *GitHubCopilotClient {
+	// First try auth store (OAuth), then fallback to environment variable
+	store := auth.GetStore()
+	authInfo := store.Get("github-copilot")
+	apiKey := ""
+	if authInfo != nil && authInfo.AccessToken != "" {
+		apiKey = authInfo.AccessToken
+	} else {
+		apiKey = os.Getenv("GITHUB_COPILOT_TOKEN")
+	}
+
+	return &GitHubCopilotClient{
+		apiKey:  apiKey,
+		baseURL: "https://api.githubcopilot.com/chat/completions",
+	}
+}
+
+// Chat sends a chat request to GitHub Copilot
+func (c *GitHubCopilotClient) Chat(ctx context.Context, model string, messages []Message) (string, error) {
+	if c.apiKey == "" {
+		return "", fmt.Errorf("GitHub Copilot token not set")
+	}
+
+	type openaiMessage struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+
+	type chatRequest struct {
+		Model    string          `json:"model"`
+		Messages []openaiMessage `json:"messages"`
+	}
+
+	var openaiMsgs []openaiMessage
+	for _, m := range messages {
+		openaiMsgs = append(openaiMsgs, openaiMessage{
+			Role:    m.Role,
+			Content: m.Content,
+		})
+	}
+
+	reqBody := chatRequest{
+		Model:    model,
+		Messages: openaiMsgs,
+	}
+
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewReader(data))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("User-Agent", "DevOrch/1.0")
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("github copilot request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("github copilot returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if len(result.Choices) > 0 {
+		return result.Choices[0].Message.Content, nil
+	}
+	return "", fmt.Errorf("empty response from github copilot")
+}
+
+// ChatStream sends a streaming chat request to GitHub Copilot
+func (c *GitHubCopilotClient) ChatStream(ctx context.Context, model string, messages []Message, onChunk func(string)) error {
+	if c.apiKey == "" {
+		return fmt.Errorf("GitHub Copilot token not set")
+	}
+
+	type openaiMessage struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+
+	type chatRequest struct {
+		Model    string          `json:"model"`
+		Messages []openaiMessage `json:"messages"`
+		Stream   bool            `json:"stream"`
+	}
+
+	var openaiMsgs []openaiMessage
+	for _, m := range messages {
+		openaiMsgs = append(openaiMsgs, openaiMessage{
+			Role:    m.Role,
+			Content: m.Content,
+		})
+	}
+
+	reqBody := chatRequest{
+		Model:    model,
+		Messages: openaiMsgs,
+		Stream:   true,
+	}
+
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("User-Agent", "DevOrch/1.0")
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("github copilot request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("github copilot returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "data: ") {
+			data := strings.TrimPrefix(line, "data: ")
+			if data == "[DONE]" {
+				break
+			}
+
+			var chunk struct {
+				Choices []struct {
+					Delta struct {
+						Content string `json:"content"`
+					} `json:"delta"`
+				} `json:"choices"`
+			}
+
+			if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+				continue
+			}
+
+			if len(chunk.Choices) > 0 {
+				content := chunk.Choices[0].Delta.Content
+				if content != "" {
+					onChunk(content)
+				}
+			}
+		}
+	}
+
+	return scanner.Err()
 }
 
 // Chat sends a chat request to Groq
@@ -1102,6 +1615,26 @@ func (c *GroqClient) Chat(ctx context.Context, model string, messages []Message)
 		return result.Choices[0].Message.Content, nil
 	}
 	return "", fmt.Errorf("empty response from groq")
+}
+
+// ChatStream sends a streaming chat request to Groq (fallback to non-streaming)
+func (c *GroqClient) ChatStream(ctx context.Context, model string, messages []Message, onChunk func(string)) error {
+	// Groq supports streaming but for simplicity, fallback to regular chat
+	response, err := c.Chat(ctx, model, messages)
+	if err != nil {
+		return err
+	}
+
+	// Simulate streaming by sending words one by one
+	words := strings.Fields(response)
+	for i, word := range words {
+		if i > 0 {
+			onChunk(" ")
+		}
+		onChunk(word)
+		time.Sleep(30 * time.Millisecond) // Small delay for streaming effect
+	}
+	return nil
 }
 
 // ChatWithProvider sends a message to the specified provider

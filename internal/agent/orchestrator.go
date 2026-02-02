@@ -66,6 +66,12 @@ type Orchestrator struct {
 
 	// TaskTimeout is the default timeout for tasks
 	TaskTimeout time.Duration
+
+	// Learner provides intelligent agent selection
+	Learner interface {
+		SelectBestAgent(ctx context.Context, taskType string, agents []string) (string, error)
+		RecordAgentPerformance(ctx context.Context, agentName string, taskType string, success bool, duration time.Duration) error
+	}
 }
 
 // NewOrchestrator creates a new orchestrator
@@ -75,6 +81,14 @@ func NewOrchestrator(registry *Registry) *Orchestrator {
 		MaxConcurrent: 3,
 		TaskTimeout:   5 * time.Minute,
 	}
+}
+
+// SetLearner sets the learning system for intelligent agent selection
+func (o *Orchestrator) SetLearner(learner interface {
+	SelectBestAgent(ctx context.Context, taskType string, agents []string) (string, error)
+	RecordAgentPerformance(ctx context.Context, agentName string, taskType string, success bool, duration time.Duration) error
+}) {
+	o.Learner = learner
 }
 
 // Execute runs a task with the appropriate agent

@@ -1,6 +1,16 @@
 package tool
 
-import "encoding/json"
+import (
+	"encoding/json"
+)
+
+// ParameterInfo describes a tool parameter
+type ParameterInfo struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Description string `json:"description"`
+	Required    bool   `json:"required,omitempty"`
+}
 
 // ToolInfo defines a tool that can be used by AI agents
 type ToolInfo struct {
@@ -10,8 +20,15 @@ type ToolInfo struct {
 	// Description explains what the tool does (for AI to understand)
 	Description string `json:"description"`
 
-	// Parameters is JSON schema for the tool's input parameters
-	Parameters json.RawMessage `json:"parameters,omitempty"`
+	// Category groups similar tools together
+	Category string `json:"category,omitempty"`
+
+	// Version of the tool
+	Version string `json:"version,omitempty"`
+
+	// Parameters can be either JSON schema or structured parameter list
+	Parameters     json.RawMessage `json:"parameters,omitempty"`
+	ParameterInfos []ParameterInfo `json:"parameter_infos,omitempty"`
 }
 
 // Tool is the interface that all tools must implement

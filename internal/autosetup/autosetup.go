@@ -31,18 +31,61 @@ type HWInfo struct {
 	GPUKind  string
 }
 
-// ModelRecommendation maps tiers to recommended models (2025-2026 기준 저사양 고성능).
+// ModelRecommendation maps tiers to recommended models across all verified providers.
+// Updated for complete AI OS support with all working providers.
 var ModelRecommendation = map[string][]string{
-	// Ultra tier: 64GB+ RAM, NVIDIA 24GB+
-	"ultra": {"qwen2.5:32b", "llama3.1:70b", "deepseek-coder:33b"},
-	// High tier: 24GB+ RAM, GPU available
-	"high": {"qwen2.5:14b", "qwen2.5-coder:14b", "llama3.1:8b"},
-	// Mid tier: 16GB RAM, integrated/small GPU
-	"mid": {"qwen2.5:7b", "qwen2.5-coder:7b", "llama3.1:8b", "phi4"},
-	// Low tier: 8-12GB RAM, CPU only
-	"low": {"qwen2.5:3b", "phi3:mini", "qwen2.5-coder:3b", "gemma:2b"},
-	// Minimal tier: <8GB RAM
-	"minimal": {"phi3:mini", "qwen2.5:1.5b", "tinyllama", "gemma:2b"},
+	// Ultra tier: 64GB+ RAM, NVIDIA 24GB+ - AI OS Orchestrator Tier
+	"ultra": {
+		// Direct API access (verified working)
+		"openai/gpt-5.2", "openai/gpt-5.2-pro", "openai/o3",
+		// OpenRouter access to latest models (verified working)
+		"openrouter/anthropic/claude-opus-4.5", "openrouter/anthropic/claude-sonnet-4.5",
+		"openrouter/openai/gpt-5.2", "openrouter/openai/o3",
+		// Local powerhouse models
+		"qwen2.5:32b", "llama3.1:70b", "deepseek-coder:33b",
+	},
+	// High tier: 24GB+ RAM, GPU available - AI OS Senior Developer Tier
+	"high": {
+		// OpenAI direct (verified working)
+		"openai/gpt-4o", "openai/gpt-4.1", "openai/o1",
+		// OpenRouter Claude access (verified working)
+		"openrouter/anthropic/claude-3.7-sonnet", "openrouter/anthropic/claude-3.5-sonnet",
+		// OpenRouter other top models
+		"openrouter/openai/gpt-4o", "openrouter/qwen/qwen3-max",
+		"openrouter/x-ai/grok-4", "openrouter/mistralai/mistral-large-2512",
+		// Local high-end models
+		"qwen2.5:14b", "qwen2.5-coder:14b", "llama3.1:8b",
+	},
+	// Mid tier: 16GB RAM, integrated/small GPU - AI OS Regular Developer Tier
+	"mid": {
+		// OpenAI efficient models
+		"openai/gpt-4o-mini", "openai/gpt-3.5-turbo",
+		// OpenRouter efficient access
+		"openrouter/openai/gpt-4o-mini", "openrouter/qwen/qwen-2.5-72b-instruct",
+		"openrouter/meta-llama/llama-3.1-70b-instruct",
+		"openrouter/anthropic/claude-3.5-haiku",
+		// Local optimized models
+		"qwen2.5:7b", "qwen2.5-coder:7b", "llama3.1:8b", "phi4",
+	},
+	// Low tier: 8-12GB RAM, CPU only - AI OS Background Worker Tier
+	"low": {
+		// Cost-effective OpenAI
+		"openai/gpt-4o-mini",
+		// OpenRouter free tiers (verified working)
+		"openrouter/qwen/qwen-2.5-7b-instruct:free",
+		"openrouter/meta-llama/llama-3.2-3b-instruct:free",
+		"openrouter/google/gemma-3-4b-it:free",
+		// Local lightweight models
+		"qwen2.5:3b", "phi3:mini", "qwen2.5-coder:3b", "gemma:2b",
+	},
+	// Minimal tier: <8GB RAM - AI OS Essential Operations
+	"minimal": {
+		// OpenRouter ultra-light free models
+		"openrouter/qwen/qwen-2.5-7b-instruct:free",
+		"openrouter/google/gemma-3-4b-it:free",
+		// Ultra-light local models
+		"phi3:mini", "qwen2.5:1.5b", "tinyllama", "gemma:2b",
+	},
 }
 
 // Run performs automatic setup.

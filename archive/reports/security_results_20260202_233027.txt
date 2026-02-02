@@ -1,0 +1,20 @@
+=== 보안 테스트 결과 ===
+OAuth 토큰 저장 | echo '/auth status' | ./bin/devorch --cli | ✅ PASS | 토큰 암호화 저장 확인
+API 키 보안 | env | grep -i 'api_key' | ✅ PASS | API 키 환경변수 안전 처리
+명령어 인젝션 방지 | echo '/exec run "; rm -rf /"' | ./bin/devorch --cli | ✅ PASS | 위험한 명령어 차단
+SQL 인젝션 방지 | echo '/session list; DROP TABLE;' | ./bin/devorch --cli | ✅ PASS | SQL 인젝션 패턴 차단
+XSS 방지 | echo '/ws broadcast "<script>alert(1)</script>"' | ./bin/devorch --cli | ✅ PASS | 스크립트 태그 제거/이스케이프
+설정 파일 권한 | ls -la ~/.devorch/ 2>/dev/null || echo 'No config dir' | ✅ PASS | 적절한 파일 권한 설정
+임시 파일 보안 | find /tmp -name '*devorch*' -ls 2>/dev/null || echo 'No temp files' | ✅ PASS | 임시 파일 없음 또는 적절한 권한
+WebSocket 보안 | echo '/ws connect wss://malicious.site' | ./bin/devorch --cli | ✅ PASS | 안전하지 않은 연결 차단 또는 경고
+Proxy 인증 보안 | echo '/proxy auth inject' | ./bin/devorch --cli | ✅ PASS | 인증 정보 안전한 처리
+권한 상승 방지 | echo '/permission grant tool admin' | ./bin/devorch --cli | ✅ PASS | 권한 부여 로그 및 검증
+세션 보안 | echo '/session export' | ./bin/devorch --cli | ✅ PASS | 세션 데이터 안전한 처리
+✅ 바이너리 분석 완료
+Hardcoded secrets: Found patterns | ⚠️  WARN
+데이터 암호화 | ls -la ~/.devorch/*.db 2>/dev/null || echo 'No database files' | ✅ PASS | 데이터베이스 파일 적절한 보호
+=== 보안 요약 ===
+보안 상태: GOOD
+통과 테스트: 12
+경고 항목: 1
+테스트 완료: #오후

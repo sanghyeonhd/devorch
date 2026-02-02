@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -29,9 +30,15 @@ func New(hub *bus.Hub, proc *session.Processor) *Server {
 
 	// tools registry and routes
 	rootDir, _ := os.Getwd()
-	reg := tool.NewRegistry()
-	reg.WorkDir = rootDir
-	reg.RegisterAll(builtin.DefaultTools(rootDir))
+	reg, err := tool.NewRegistry()
+	if err != nil {
+		// Log error and continue with nil registry
+		fmt.Printf("Warning: failed to create tool registry: %v\n", err)
+		reg = nil
+	} else {
+		reg.WorkDir = rootDir
+		reg.RegisterAll(builtin.DefaultTools(rootDir))
+	}
 
 	tr := &routes.ToolsRoutes{Registry: reg}
 	tr.RegisterTools(mux)

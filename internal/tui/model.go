@@ -169,7 +169,14 @@ type Model struct {
 	connectFilter       string            // Search filter
 	connectFilteredList []ConnectProvider // Filtered providers
 	connectInputMode    bool              // true = API key input mode
+	connectSearchMode   bool              // true = search mode active
 	apiKeyInput         textinput.Model   // API key input field
+	providerSearchInput textinput.Model   // Provider search input
+
+	// Provider selection improvements
+	providerFilter     string         // Current filter for provider selection
+	filteredProviders  []ProviderInfo // Filtered provider list
+	showProviderSearch bool           // Show search input in provider selection
 
 	// Display options (OpenCode style)
 	showDetails  bool // Show token count, timing, model info
@@ -395,28 +402,43 @@ func New() Model {
 		presetManager = nil
 	}
 
+	// Initialize search inputs
+	providerSearchInput := textinput.New()
+	providerSearchInput.Placeholder = "Search providers..."
+	providerSearchInput.CharLimit = 50
+	providerSearchInput.Width = 40
+
+	apiKeyInput := textinput.New()
+	apiKeyInput.Placeholder = "Enter your API key..."
+	apiKeyInput.EchoMode = textinput.EchoPassword
+	apiKeyInput.CharLimit = 200
+	apiKeyInput.Width = 50
+
 	return Model{
-		mode:              ViewModeChat,
-		input:             ti,
-		spinner:           sp,
-		theme:             theme,
-		commandPalette:    NewCommandPalette(theme),
-		viewStack:         []ViewMode{},
-		viewData:          make(map[ViewMode]interface{}),
-		confirmYes:        "Yes",
-		confirmNo:         "No",
-		confirmSelected:   0,
-		workMode:          WorkModeAsk, // Default to Ask mode
-		workModeContext:   make(map[string]string),
-		editContextFiles:  []string{},
-		agentSteps:        []AgentStep{},
-		multiModelEnabled: false,
-		selectedModels:    []ModelSelection{},
-		modelResponses:    make(map[string]*ModelResponse),
-		showCompareView:   false,
-		compareScrollIdx:  0,
-		modelRatings:      make(map[string]ResponseRating),
-		presetManager:     presetManager,
+		mode:                ViewModeChat,
+		input:               ti,
+		spinner:             sp,
+		theme:               theme,
+		commandPalette:      NewCommandPalette(theme),
+		viewStack:           []ViewMode{},
+		viewData:            make(map[ViewMode]interface{}),
+		confirmYes:          "Yes",
+		confirmNo:           "No",
+		confirmSelected:     0,
+		workMode:            WorkModeAsk, // Default to Ask mode
+		workModeContext:     make(map[string]string),
+		editContextFiles:    []string{},
+		agentSteps:          []AgentStep{},
+		multiModelEnabled:   false,
+		selectedModels:      []ModelSelection{},
+		modelResponses:      make(map[string]*ModelResponse),
+		showCompareView:     false,
+		compareScrollIdx:    0,
+		modelRatings:        make(map[string]ResponseRating),
+		presetManager:       presetManager,
+		providerSearchInput: providerSearchInput,
+		apiKeyInput:         apiKeyInput,
+		filteredProviders:   []ProviderInfo{},
 		messages: []Message{
 			{Role: "system", Content: "Welcome to DevOrch! Type / for commands or start chatting.\n\n💬 Mode: Ask - Quick questions and answers"},
 		},
@@ -853,6 +875,30 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleSelectionKey handles keys in selection list mode.
 func (m Model) handleSelectionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle provider search mode first
+	if m.mode == ViewModeProviderSelect && m.showProviderSearch {
+		switch msg.String() {
+		case "esc":
+			m.showProviderSearch = false
+			m.providerSearchInput.SetValue("")
+			m.providerFilter = ""
+			m.filterProviders()
+			return m, nil
+		case "enter":
+			// Apply filter and exit search mode
+			m.showProviderSearch = false
+			m.providerFilter = m.providerSearchInput.Value()
+			m.filterProviders()
+			return m, nil
+		default:
+			// Update search input and filter
+			var cmd tea.Cmd
+			m.providerSearchInput, cmd = m.providerSearchInput.Update(msg)
+			m.providerFilter = m.providerSearchInput.Value()
+			m.filterProviders()
+			return m, cmd
+		}
+	}
 	switch msg.String() {
 	case "esc", "ctrl+c":
 		m.mode = ViewModeChat
@@ -899,10 +945,9 @@ func (m Model) handleSelectionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				})
 				m.mode = ViewModeChat
 			case ViewModeProviderSelect:
-				// Extract provider name
-				providers := GetAvailableProviders()
-				if m.selectionIdx < len(providers) {
-					p := providers[m.selectionIdx]
+				// Use filtered providers instead of all providers
+				if m.selectionIdx < len(m.filteredProviders) {
+					p := m.filteredProviders[m.selectionIdx]
 					// Get first model for this provider
 					models := GetModelsForProvider(p.Name)
 					defaultModel := ""
@@ -975,6 +1020,13 @@ func (m Model) handleSelectionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.mode = ViewModeChat
 		}
 		return m, nil
+	case "/":
+		// Enter search mode for provider selection
+		if m.mode == ViewModeProviderSelect {
+			m.showProviderSearch = true
+			m.providerSearchInput.Focus()
+			return m, nil
+		}
 	case "up", "k":
 		if m.selectionIdx > 0 {
 			m.selectionIdx--
@@ -1226,8 +1278,34 @@ func (m Model) viewSelectionList() string {
 	title := m.theme.Title.Render("📋 " + m.selectionTitle)
 	b.WriteString(title + "\n\n")
 
+	// Show search input for provider selection
+	if m.mode == ViewModeProviderSelect {
+		if m.showProviderSearch {
+			// Search mode active
+			b.WriteString(m.theme.Accent.Render("🔍 Search: "))
+			b.WriteString(m.providerSearchInput.View())
+			b.WriteString("\n")
+			b.WriteString(m.theme.Subtle.Render("Press Enter to apply filter, Esc to cancel"))
+			b.WriteString("\n\n")
+		} else if m.providerFilter != "" {
+			// Show current filter
+			b.WriteString(m.theme.Subtle.Render(fmt.Sprintf("🔍 Filtered: '%s' - Press / to search again", m.providerFilter)))
+			b.WriteString("\n\n")
+		} else {
+			// Show search hint
+			b.WriteString(m.theme.Subtle.Render("🔍 Press / to search providers"))
+			b.WriteString("\n\n")
+		}
+	}
+
 	if len(m.selectionList) == 0 {
-		b.WriteString(m.theme.Subtle.Render("No items available."))
+		if m.mode == ViewModeProviderSelect && m.providerFilter != "" {
+			b.WriteString(m.theme.Warning.Render("No providers found matching: " + m.providerFilter))
+			b.WriteString("\n\n")
+			b.WriteString(m.theme.Subtle.Render("Press / to search again or Esc to clear filter"))
+		} else {
+			b.WriteString(m.theme.Subtle.Render("No items available."))
+		}
 	} else {
 		maxShow := 15
 		startIdx := 0
@@ -1246,7 +1324,33 @@ func (m Model) viewSelectionList() string {
 				cursor = "▶ "
 				style = m.theme.Selected
 			}
-			b.WriteString(style.Render(cursor+m.selectionList[i]) + "\n")
+
+			// Enhanced display for providers
+			if m.mode == ViewModeProviderSelect && i < len(m.filteredProviders) {
+				p := m.filteredProviders[i]
+				statusIcon := "○" // Not connected
+				statusColor := m.theme.Warning
+				if p.AuthStatus == "authenticated" {
+					statusIcon = "✓" // Connected
+					statusColor = m.theme.Success
+				}
+
+				kindTag := ""
+				if p.Kind == "local" {
+					kindTag = m.theme.Accent.Render(" [LOCAL]")
+				} else {
+					kindTag = m.theme.Subtle.Render(" [CLOUD]")
+				}
+
+				line := cursor + statusColor.Render(statusIcon) + " " + p.DisplayName + kindTag
+				if i == m.selectionIdx {
+					line = style.Render(line)
+				}
+				b.WriteString(line + "\n")
+			} else {
+				// Default display for other selection types
+				b.WriteString(style.Render(cursor+m.selectionList[i]) + "\n")
+			}
 		}
 
 		if len(m.selectionList) > maxShow {
@@ -1615,6 +1719,50 @@ func SetActiveProvider(provider, model string) {
 // GetActiveProvider returns the active provider
 func GetActiveProvider() ActiveProvider {
 	return globalActiveProvider
+}
+
+// filterProviders filters the provider list based on current filter
+func (m *Model) filterProviders() {
+	allProviders := GetAvailableProviders()
+	if m.providerFilter == "" {
+		m.filteredProviders = allProviders
+		// Update selection list for display
+		m.selectionList = make([]string, 0, len(allProviders))
+		for _, p := range allProviders {
+			status := "○"
+			if p.AuthStatus == "authenticated" {
+				status = "✓"
+			}
+			kind := ""
+			if p.Kind == "local" {
+				kind = " (local)"
+			}
+			m.selectionList = append(m.selectionList, fmt.Sprintf("%s%s %s", p.DisplayName, kind, status))
+		}
+	} else {
+		filter := strings.ToLower(m.providerFilter)
+		m.filteredProviders = []ProviderInfo{}
+		m.selectionList = []string{}
+		for _, p := range allProviders {
+			if strings.Contains(strings.ToLower(p.DisplayName), filter) ||
+				strings.Contains(strings.ToLower(p.Name), filter) {
+				m.filteredProviders = append(m.filteredProviders, p)
+				status := "○"
+				if p.AuthStatus == "authenticated" {
+					status = "✓"
+				}
+				kind := ""
+				if p.Kind == "local" {
+					kind = " (local)"
+				}
+				m.selectionList = append(m.selectionList, fmt.Sprintf("%s%s %s", p.DisplayName, kind, status))
+			}
+		}
+	}
+	// Reset selection index if it's out of bounds
+	if m.selectionIdx >= len(m.selectionList) {
+		m.selectionIdx = 0
+	}
 }
 
 func (m Model) sendToLLM(text string) tea.Cmd {
@@ -2161,164 +2309,110 @@ func (m Model) viewConnect() string {
 
 // handleConnectKey handles keys in connect mode
 func (m Model) handleConnectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// API key input mode
 	if m.connectInputMode {
+		// Handle API key input mode
 		switch msg.String() {
 		case "esc":
 			m.connectInputMode = false
+			m.apiKeyInput.SetValue("")
 			return m, nil
 		case "enter":
-			// Save the API key
-			apiKey := strings.TrimSpace(m.apiKeyInput.Value())
+			// Save API key
+			apiKey := m.apiKeyInput.Value()
 			if apiKey != "" {
 				provider := m.connectFilteredList[m.connectSelectedIdx]
-				// Save using auth store
-				if err := auth.SetAPIKey(provider.ID, apiKey); err != nil {
-					m.messages = append(m.messages, Message{
-						Role:    "system",
-						Content: fmt.Sprintf("❌ Failed to save API key: %v", err),
-					})
-				} else {
-					// Also set environment variable for this session
-					os.Setenv(provider.EnvVar, apiKey)
-					m.messages = append(m.messages, Message{
-						Role: "system",
-						Content: fmt.Sprintf("✅ Connected to %s!\n\nAPI key saved to ~/.config/devorch/auth.json",
-							provider.Name),
-					})
-				}
+				// Save to auth store
+				store := auth.GetStore()
+				store.Set(provider.ID, &auth.AuthInfo{
+					APIKey: apiKey,
+				})
+				m.messages = append(m.messages, Message{
+					Role:    "system",
+					Content: fmt.Sprintf("✓ API key saved for %s\n\nYou can now use this provider!", provider.Name),
+				})
 				m.connectInputMode = false
 				m.mode = ViewModeChat
-				// Refresh connection status
-				m.connectProviders = GetConnectProviders()
-				m.connectFilteredList = FilterConnectProviders(m.connectProviders, m.connectFilter)
+				return m, nil
 			}
-			return m, nil
-		case "o":
+		case "ctrl+o":
 			// Open browser for API key
 			provider := m.connectFilteredList[m.connectSelectedIdx]
-			if provider.AuthURL != "" {
-				OpenBrowser(provider.AuthURL)
+			if err := OpenBrowserForLogin(provider.ID); err != nil {
+				m.messages = append(m.messages, Message{
+					Role:    "system",
+					Content: fmt.Sprintf("Failed to open browser: %v", err),
+				})
 			}
 			return m, nil
 		default:
+			// Update API key input
 			var cmd tea.Cmd
 			m.apiKeyInput, cmd = m.apiKeyInput.Update(msg)
 			return m, cmd
 		}
 	}
 
+	// Handle normal navigation mode
 	switch msg.String() {
-	case "esc", "ctrl+c":
+	case "esc":
 		m.mode = ViewModeChat
-		m.connectFilter = ""
 		return m, nil
-
 	case "enter":
-		if m.connectSelectedIdx >= 0 && m.connectSelectedIdx < len(m.connectFilteredList) {
+		if len(m.connectFilteredList) > 0 && m.connectSelectedIdx < len(m.connectFilteredList) {
 			provider := m.connectFilteredList[m.connectSelectedIdx]
-
-			// Get auth config for this provider
-			authConfig := auth.ProviderConfigs[provider.ID]
-
+			
+			// Handle different auth types
 			switch provider.AuthType {
-			case "none":
-				// For local providers like Ollama
-				if provider.IsConnected {
-					m.messages = append(m.messages, Message{
-						Role:    "system",
-						Content: fmt.Sprintf("✅ %s is already running and ready!", provider.Name),
-					})
-				} else {
-					m.messages = append(m.messages, Message{
-						Role:    "system",
-						Content: fmt.Sprintf("❌ %s is not running.\n\n💡 Start it with: ollama serve", provider.Name),
-					})
-				}
-				m.mode = ViewModeChat
-
 			case "oauth":
-				if authConfig != nil && authConfig.DeviceFlow != nil {
-					// Device Code Flow (GitHub Copilot style)
-					m.messages = append(m.messages, Message{
-						Role:    "system",
-						Content: fmt.Sprintf("🔐 Starting device authorization for %s...\n\nPlease use CLI mode (devorch cli) for OAuth authentication.", provider.Name),
-					})
-				} else if authConfig != nil && authConfig.OAuth != nil {
-					// OAuth PKCE Flow
-					m.messages = append(m.messages, Message{
-						Role:    "system",
-						Content: fmt.Sprintf("🔐 Starting OAuth for %s...\n\nPlease use CLI mode (devorch cli) for OAuth authentication.", provider.Name),
-					})
-				} else if provider.OAuthURL != "" {
-					// Fallback - open browser
-					OpenBrowser(provider.OAuthURL)
-					m.messages = append(m.messages, Message{
-						Role: "system",
-						Content: fmt.Sprintf("🌐 Opening browser for %s authentication...\n\nFollow the instructions in your browser to complete the OAuth flow.",
-							provider.Name),
-					})
-				}
+				// Start OAuth flow
+				m.messages = append(m.messages, Message{
+					Role:    "system",
+					Content: fmt.Sprintf("🔐 Starting OAuth login for %s...\n\nThis will open your browser to complete the authentication.", provider.Name),
+				})
 				m.mode = ViewModeChat
-
-			case "api_key":
-				store := auth.GetStore()
-				if store.IsConnected(provider.ID) || provider.IsConnected {
-					// Already connected - ask if they want to reconnect
+				// Trigger OAuth flow
+				if err := OpenBrowserForLogin(provider.ID); err != nil {
 					m.messages = append(m.messages, Message{
 						Role:    "system",
-						Content: fmt.Sprintf("✅ %s is already connected!\n\nTo update your API key, enter a new one below:", provider.Name),
+						Content: fmt.Sprintf("Failed to open browser: %v", err),
 					})
 				}
+				return m, nil
+			case "api_key":
 				// Enter API key input mode
 				m.connectInputMode = true
-				m.apiKeyInput = textinput.New()
-				m.apiKeyInput.Placeholder = "Paste your API key here..."
-				m.apiKeyInput.EchoMode = textinput.EchoPassword
 				m.apiKeyInput.Focus()
-				m.apiKeyInput.Width = 60
+				m.apiKeyInput.SetValue("")
+				return m, nil
+			case "none":
+				// No auth needed (like Ollama)
+				m.messages = append(m.messages, Message{
+					Role:    "system",
+					Content: fmt.Sprintf("✓ Connected to %s\n\nNo authentication required for this provider.", provider.Name),
+				})
+				m.mode = ViewModeChat
+				return m, nil
 			}
 		}
 		return m, nil
-
 	case "up", "k":
 		if m.connectSelectedIdx > 0 {
 			m.connectSelectedIdx--
 		}
 		return m, nil
-
 	case "down", "j":
 		if m.connectSelectedIdx < len(m.connectFilteredList)-1 {
 			m.connectSelectedIdx++
 		}
 		return m, nil
-
 	case "/":
-		// Focus on search - for now just show a message
-		// In a full implementation, we'd switch to search input mode
-		return m, nil
-
-	case "backspace":
-		if len(m.connectFilter) > 0 {
-			m.connectFilter = m.connectFilter[:len(m.connectFilter)-1]
-			m.connectFilteredList = FilterConnectProviders(m.connectProviders, m.connectFilter)
-			if m.connectSelectedIdx >= len(m.connectFilteredList) {
-				m.connectSelectedIdx = max(0, len(m.connectFilteredList)-1)
-			}
-		}
-		return m, nil
-
-	default:
-		// Typing - add to filter
-		if len(msg.String()) == 1 && msg.String() != " " {
-			m.connectFilter += msg.String()
-			m.connectFilteredList = FilterConnectProviders(m.connectProviders, m.connectFilter)
-			if m.connectSelectedIdx >= len(m.connectFilteredList) {
-				m.connectSelectedIdx = max(0, len(m.connectFilteredList)-1)
-			}
-		}
+		// Enter search mode
+		m.connectSearchMode = true
+		m.providerSearchInput.Focus()
 		return m, nil
 	}
+
+	return m, nil
 }
 
 // handleSubCommandKey handles key events in subcommand selection mode

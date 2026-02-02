@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"time"
 
 	"devorch/internal/okaon"
@@ -22,6 +23,66 @@ type Learner struct {
 
 func NewLearner(okstore OkAONStore, b bandit.Bandit) *Learner {
 	return &Learner{okstore: okstore, bandit: b}
+}
+
+// SelectBestAgent selects the best agent for a given task type using bandit algorithm
+func (l *Learner) SelectBestAgent(ctx context.Context, taskType string, agents []string) (string, error) {
+	if len(agents) == 0 {
+		return "", fmt.Errorf("no agents available")
+	}
+
+	if len(agents) == 1 {
+		return agents[0], nil
+	}
+
+	// Convert agent names to bandit arms
+	var arms []bandit.ArmKey
+	for _, agent := range agents {
+		armKey := bandit.ArmKey(fmt.Sprintf("%s:%s", taskType, agent))
+		arms = append(arms, armKey)
+	}
+
+	// Use bandit algorithm to select best arm
+	selectedArm, err := l.bandit.Select(arms)
+	if err != nil {
+		// Fallback to random selection
+		return agents[0], nil
+	}
+
+	// Extract agent name from selected arm
+	armStr := string(selectedArm)
+	if colon := len(taskType) + 1; colon < len(armStr) {
+		return armStr[colon:], nil
+	}
+
+	return agents[0], nil
+}
+
+// RecordAgentPerformance records the performance of an agent for learning
+func (l *Learner) RecordAgentPerformance(ctx context.Context, agentName string, taskType string, success bool, duration time.Duration) error {
+	// Convert success/failure to reward (0.0 = failure, 1.0 = success)
+	reward := 0.0
+	if success {
+		reward = 1.0
+
+		// Adjust reward based on speed (faster = better reward)
+		// Max reward for tasks completed in under 1 second
+		// Linear decrease for longer tasks, minimum 0.1
+		speedBonus := 1.0
+		if duration > time.Second {
+			speedBonus = 1.0 / (float64(duration) / float64(time.Second))
+			if speedBonus < 0.1 {
+				speedBonus = 0.1
+			}
+		}
+		reward = reward * speedBonus
+	}
+
+	// Create bandit arm key
+	armKey := bandit.ArmKey(fmt.Sprintf("%s:%s", taskType, agentName))
+
+	// Update bandit with observed reward
+	return l.bandit.Update(armKey, reward)
 }
 
 // ArmKey: contextHash + model => arm
@@ -62,6 +123,9 @@ func (bs BanditStore) Load(arm bandit.ArmKey) (bandit.ArmStats, bool, error) {
 
 func (bs BanditStore) Save(arm bandit.ArmKey, st bandit.ArmStats) error {
 	provider, model := parseArmKey(string(arm))
+
+	// Convert bandit stats back to OkAON format
+	// Note: This is a simplified conversion for the learning demo
 	return bs.OkStore.UpsertArmStats(bs.Ctx, okaon.ArmStatUpdate{
 		Fingerprint:    bs.Fingerprint,
 		Category:       bs.Category,

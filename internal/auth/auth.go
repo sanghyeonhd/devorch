@@ -667,17 +667,49 @@ func ExchangeCode(providerID string, code string, result *OAuthResult) (*AuthInf
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	// Add browser-like User-Agent to avoid Cloudflare bot detection
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("Pragma", "no-cache")
 
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			DisableKeepAlives: true,
+		},
+	}
+
+	// Retry logic for Cloudflare protection
+	var resp *http.Response
+	var respErr error
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		resp, respErr = client.Do(req)
+		if respErr == nil {
+			break
+		}
+		if i < maxRetries-1 {
+			time.Sleep(time.Duration(i+1) * 2 * time.Second) // Exponential backoff
+		}
+	}
+
+	if respErr != nil {
+		return nil, respErr
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("token exchange failed: %s", string(body))
+		bodyStr := string(body)
+
+		// Check for Cloudflare challenge
+		if strings.Contains(bodyStr, "cloudflare") || strings.Contains(bodyStr, "Just a moment") {
+			return nil, fmt.Errorf("token exchange blocked by Cloudflare protection. Please try again in a few minutes or use API key authentication instead")
+		}
+
+		return nil, fmt.Errorf("token exchange failed: %s", bodyStr)
 	}
 
 	var tokenResp struct {

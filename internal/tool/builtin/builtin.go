@@ -55,11 +55,11 @@ func DefaultTools(rootDir string) []tool.Tool {
 		},
 		&ReadTool{
 			RootDir:       rootDir,
-			AllowExternal: false,
+			AllowExternal: true,
 		},
 		&WriteTool{
 			RootDir:        rootDir,
-			AllowExternal:  false,
+			AllowExternal:  true,
 			AllowOverwrite: true,
 			CreateDirs:     true,
 		},

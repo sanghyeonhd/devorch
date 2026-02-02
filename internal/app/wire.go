@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"time"
 
+	"devorch/internal/auth"
 	"devorch/internal/config"
 	"devorch/internal/global"
 	okaonsqlite "devorch/internal/okaon/sqlite"
@@ -17,6 +18,7 @@ import (
 	"devorch/internal/provider/cohere"
 	"devorch/internal/provider/copilot"
 	"devorch/internal/provider/gitlab"
+	"devorch/internal/provider/google"
 	"devorch/internal/provider/groq"
 	"devorch/internal/provider/mistral"
 	"devorch/internal/provider/ollama"
@@ -38,9 +40,18 @@ func WireMinimal(cfg config.Config) (*Deps, error) {
 
 	reg := provider.NewRegistry()
 
+	// Initialize auth store to check for stored tokens
+	store := auth.GetStore()
+
 	// OpenAI
-	if cfg.OpenAIKey != "" {
-		reg.Register(openai.New(cfg.OpenAIKey))
+	apiKey := cfg.OpenAIKey
+	if apiKey == "" {
+		if authInfo := store.Get("openai"); authInfo != nil && authInfo.AccessToken != "" {
+			apiKey = authInfo.AccessToken
+		}
+	}
+	if apiKey != "" {
+		reg.Register(openai.New(apiKey))
 	}
 
 	// OpenRouter
@@ -77,8 +88,17 @@ func WireMinimal(cfg config.Config) (*Deps, error) {
 	}
 
 	// Anthropic Claude
-	if os.Getenv("ANTHROPIC_API_KEY") != "" {
+	if authInfo := store.Get("anthropic"); authInfo != nil && authInfo.AccessToken != "" {
 		reg.Register(anthropic.New())
+	} else if os.Getenv("ANTHROPIC_API_KEY") != "" {
+		reg.Register(anthropic.New())
+	}
+
+	// Google AI
+	if authInfo := store.Get("google"); authInfo != nil && authInfo.AccessToken != "" {
+		reg.Register(google.New())
+	} else if os.Getenv("GOOGLE_API_KEY") != "" {
+		reg.Register(google.New())
 	}
 
 	// AWS Bedrock
@@ -97,7 +117,9 @@ func WireMinimal(cfg config.Config) (*Deps, error) {
 	}
 
 	// GitHub Copilot
-	if os.Getenv("GITHUB_TOKEN") != "" || os.Getenv("COPILOT_TOKEN") != "" {
+	if authInfo := store.Get("github-copilot"); authInfo != nil && authInfo.AccessToken != "" {
+		reg.Register(copilot.New())
+	} else if os.Getenv("GITHUB_TOKEN") != "" || os.Getenv("COPILOT_TOKEN") != "" {
 		reg.Register(copilot.New())
 	}
 

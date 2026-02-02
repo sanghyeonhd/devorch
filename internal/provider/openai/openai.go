@@ -2,7 +2,9 @@ package openai
 
 import (
 	"context"
+	"os"
 
+	"devorch/internal/auth"
 	"devorch/internal/provider"
 	"devorch/internal/provider/openai_compat"
 )
@@ -12,6 +14,21 @@ type OpenAI struct {
 }
 
 func New(apiKey string) *OpenAI {
+	// If no API key provided, try auth store, then environment variable
+	if apiKey == "" {
+		store := auth.GetStore()
+		if authInfo := store.Get("openai"); authInfo != nil {
+			// OAuth token takes precedence over API key
+			if authInfo.AccessToken != "" {
+				apiKey = authInfo.AccessToken
+			} else if authInfo.APIKey != "" {
+				apiKey = authInfo.APIKey
+			}
+		} else {
+			apiKey = os.Getenv("OPENAI_API_KEY")
+		}
+	}
+
 	return &OpenAI{
 		c: openai_compat.New("https://api.openai.com/v1", apiKey, nil),
 	}

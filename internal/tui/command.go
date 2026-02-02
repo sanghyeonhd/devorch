@@ -113,6 +113,8 @@ func GetSlashCommands() []SlashCommand {
 		{Name: "copy", Description: "Copy to clipboard", Category: "Edit", Handler: cmdCopy},
 		{Name: "paste", Description: "Paste from clipboard", Category: "Edit", Handler: cmdPaste},
 		{Name: "retry", Description: "Retry last message", Category: "Edit", Handler: cmdRetry},
+		{Name: "permissions", Description: "Manage tool permissions", Category: "Tools", Handler: cmdPermissions},
+		{Name: "perm", Description: "Manage tool permissions (alias)", Category: "Tools", Handler: cmdPermissions},
 	}
 
 	// Load custom commands (OpenCode 스타일)
@@ -555,21 +557,11 @@ func cmdModels(m *Model) tea.Cmd {
 
 func cmdProvider(m *Model) tea.Cmd {
 	m.mode = ViewModeProviderSelect
-	providers := GetAvailableProviders()
-	m.selectionList = make([]string, 0, len(providers))
-	for _, p := range providers {
-		status := "○"
-		if p.AuthStatus == "authenticated" {
-			status = "✓"
-		}
-		kind := ""
-		if p.Kind == "local" {
-			kind = " (local)"
-		}
-		m.selectionList = append(m.selectionList, fmt.Sprintf("%s%s %s", p.DisplayName, kind, status))
-	}
+	m.providerFilter = ""
+	m.showProviderSearch = false
+	m.filterProviders() // Initialize the filtered list
 	m.selectionIdx = 0
-	m.selectionTitle = "Select Provider"
+	m.selectionTitle = "Select Provider (/ to search)"
 	return nil
 }
 
@@ -1345,6 +1337,14 @@ func cmdVersion(m *Model) tea.Cmd {
 
 func cmdHelp(m *Model) tea.Cmd {
 	m.mode = ViewModeHelp
+	return nil
+}
+
+func cmdPermissions(m *Model) tea.Cmd {
+	m.messages = append(m.messages, Message{
+		Role:    "system",
+		Content: "Permission management is only available in CLI mode. Use 'devorch' command and then '/perm' for tool permissions.",
+	})
 	return nil
 }
 

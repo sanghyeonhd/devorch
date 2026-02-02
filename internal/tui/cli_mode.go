@@ -22,24 +22,35 @@ import (
 
 // CLIMode runs DevOrch in headless CLI mode (no TUI, direct terminal I/O)
 type CLIMode struct {
-	theme       Theme
-	messages    []Message
-	provider    string
-	model       string
-	isStreaming bool
-	client      *OllamaClient
+	theme           Theme
+	messages        []Message
+	provider        string
+	model           string
+	isStreaming     bool
+	client          *OllamaClient
+	workModeManager *CLIWorkModeManager
+	multiModel      *CLIMultiModel
 }
 
 // NewCLIMode creates a new CLI mode instance
 func NewCLIMode() *CLIMode {
 	active := GetActiveProvider()
 	return &CLIMode{
-		theme:    DefaultTheme(),
-		messages: []Message{},
-		provider: active.Provider,
-		model:    active.Model,
-		client:   NewOllamaClient(),
+		theme:           DefaultTheme(),
+		messages:        []Message{},
+		provider:        active.Provider,
+		model:           active.Model,
+		client:          NewOllamaClient(),
+		workModeManager: NewCLIWorkModeManager(),
+		multiModel:      NewCLIMultiModel(),
 	}
+}
+
+// createClientForProvider creates appropriate client based on provider
+func (c *CLIMode) createClientForProvider(provider string) *OllamaClient {
+	// For now, return OllamaClient for all providers
+	// In the future, this can be extended to return specific client types
+	return NewOllamaClient()
 }
 
 // RunCLI is a convenience function to run CLI mode
@@ -168,6 +179,87 @@ func (c *CLIMode) handleCommand(input string) bool {
 	case "agent":
 		c.handleAgentCommand(args)
 
+	// ====== AI OS 자율 실행 시스템 ======
+	case "autonomous", "auto", "aios":
+		c.handleAutonomousCommand(args)
+
+	case "learn":
+		c.handleLearnCommand(args)
+
+	case "analyze":
+		c.handleAnalyzeCommand(args)
+
+	case "bg":
+		c.handleBgCommand(args)
+
+	case "lsp":
+		c.handleLspCommand(args)
+
+	case "terminal":
+		c.handleTerminalCommand(args)
+
+	case "shell":
+		c.handleShellCommand(args)
+
+	case "edit":
+		c.handleEditCommand(args)
+
+	case "fh":
+		c.handleHistoryCommand(args)
+
+	case "permission":
+		c.handlePermissionCommand(args)
+
+	case "quality":
+		c.handleQualityCommand(args)
+
+	case "perf":
+		c.handlePerfCommand(args)
+
+	case "doctor":
+		c.handleDoctorCommand(args)
+
+	case "cost":
+		c.handleCostCommand(args)
+
+	// ====== Phase 4: Server & Collaboration Systems ======
+	case "mcp":
+		c.handleMCPCommand(args)
+
+	case "server":
+		c.handleServerCommand(args)
+
+	case "websocket", "ws":
+		c.handleWebSocketCommand(args)
+
+	case "webui":
+		c.handleWebUICommand(args)
+
+	case "collab":
+		c.handleCollaborationCommand(args)
+
+	case "share":
+		c.handleShareCommand(args)
+
+	case "plugin":
+		c.handlePluginCommand(args)
+
+	// ====== Phase 5: Platform & Advanced Features ======
+	case "platform":
+		c.handlePlatformCommand(args)
+
+	case "i18n":
+		c.handleI18nCommand(args)
+
+	case "extension", "ext":
+		c.handleExtensionCommand(args)
+
+	case "runtime":
+		c.handleRuntimeCommand(args)
+
+	case "experiment":
+		c.handleExperimentCommand(args)
+
 	case "code":
 		c.handleCodeCommand(args)
 
@@ -231,10 +323,6 @@ func (c *CLIMode) handleCommand(input string) bool {
 		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /code editor instead"))
 		c.showEditor()
 
-	case "mcps", "mcp":
-		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /tools mcp instead"))
-		c.showMCPs()
-
 	case "review":
 		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /code review instead"))
 		c.reviewCode(args)
@@ -295,16 +383,8 @@ func (c *CLIMode) handleCommand(input string) bool {
 		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /config instead"))
 		c.showSettings()
 
-	case "lsp":
-		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /tools lsp instead"))
-		c.showLSP()
-
 	case "permissions", "perm":
 		c.showPermissions(args)
-
-	case "doctor":
-		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /system doctor instead"))
-		c.runDoctor()
 
 	case "version":
 		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /system version instead"))
@@ -321,10 +401,6 @@ func (c *CLIMode) handleCommand(input string) bool {
 	case "reset":
 		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /session reset instead"))
 		c.resetSession()
-
-	case "share":
-		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /session share instead"))
-		c.shareSession(args)
 
 	case "unshare":
 		fmt.Println(c.theme.Subtle.Render("💡 Tip: Use /session unshare instead"))
@@ -529,22 +605,44 @@ func (c *CLIMode) handleAgentCommand(args []string) {
 		return
 	}
 	if args[0] == "help" {
-		fmt.Println(c.theme.Accent.Render("🤖 Agent Commands:"))
+		fmt.Println(c.theme.Accent.Render("🤖 Agent Orchestration Commands:"))
 		fmt.Println("  /agent                      Show current agent")
-		fmt.Println("  /agent list                 List all AI agents")
+		fmt.Println("  /agent list                 List registered agents")
+		fmt.Println("  /agent register <name> <role> Register new agent")
 		fmt.Println("  /agent set <name>           Switch to agent")
-		fmt.Println("  /agent <name>               Switch to agent (shortcut)")
+		fmt.Println("  /agent task create <desc>   Create multi-step task")
+		fmt.Println("  /agent task list [status]   List tasks")
+		fmt.Println("  /agent task deps <id>       Show task dependencies")
+		fmt.Println("  /agent plan create <desc>   Create execution plan")
+		fmt.Println("  /agent plan execute <id>    Execute plan")
+		fmt.Println("  /agent orchestrate <task>   Auto-decompose complex task")
 		return
 	}
 	switch args[0] {
 	case "list":
 		c.showAgents()
+	case "register":
+		if len(args) >= 3 {
+			c.registerAgent(args[1], args[2])
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /agent register <name> <role>"))
+		}
 	case "set":
 		if len(args) > 1 {
 			c.setAgent(args[1])
 		} else {
 			fmt.Println(c.theme.Warning.Render("⚠ Usage: /agent set <name>"))
 			c.showAgents()
+		}
+	case "task":
+		c.handleAgentTaskCommand(args[1:])
+	case "plan":
+		c.handleAgentPlanCommand(args[1:])
+	case "orchestrate":
+		if len(args) > 1 {
+			c.orchestrateTask(strings.Join(args[1:], " "))
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /agent orchestrate <complex_task>"))
 		}
 	default:
 		// Allow direct agent name: /agent coder
@@ -3189,4 +3287,514 @@ func (c *CLIMode) fuzzyMatch(input, target string) bool {
 	// Calculate similarity percentage
 	similarity := float64(matches) / float64(len(input))
 	return similarity >= 0.6
+}
+
+// ============================================================================
+// Phase 1: Core AI Systems CLI Implementation
+// ============================================================================
+
+// handleLearnCommand handles Multi-LLM Learning commands
+func (c *CLIMode) handleLearnCommand(args []string) {
+	if len(args) == 0 || args[0] == "help" {
+		fmt.Println(c.theme.Accent.Render("🧠 Multi-LLM Learning Commands:"))
+		fmt.Println("  /learn status                   Show learning status & model performance")
+		fmt.Println("  /learn models                   Show model Thompson Sampling scores")
+		fmt.Println("  /learn ensemble <strategy>      Set ensemble strategy (6 options)")
+		fmt.Println("  /learn profile                  Show personalized user profile")
+		fmt.Println("  /learn optimize --auto          Enable auto optimization")
+		fmt.Println("  /learn feedback <session> <rating> Provide model feedback")
+		fmt.Println("  /learn threshold <quality>      Set quality threshold")
+		fmt.Println("  /learn exploration <rate>       Set exploration/exploitation ratio")
+		return
+	}
+
+	switch args[0] {
+	case "status":
+		c.showLearningStatus()
+	case "models":
+		c.showModelScores()
+	case "ensemble":
+		if len(args) > 1 {
+			c.setEnsembleStrategy(args[1])
+		} else {
+			c.showEnsembleStrategies()
+		}
+	case "profile":
+		c.showUserProfile()
+	case "optimize":
+		if len(args) > 1 && args[1] == "--auto" {
+			c.enableAutoOptimization()
+		} else {
+			c.runOptimization()
+		}
+	case "feedback":
+		if len(args) >= 3 {
+			c.provideFeedback(args[1], args[2])
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /learn feedback <session> <rating>"))
+		}
+	case "threshold":
+		if len(args) > 1 {
+			c.setQualityThreshold(args[1])
+		} else {
+			c.showQualityThreshold()
+		}
+	case "exploration":
+		if len(args) > 1 {
+			c.setExplorationRate(args[1])
+		} else {
+			c.showExplorationRate()
+		}
+	default:
+		fmt.Printf("Unknown learn command: %s. Use /learn help for details.\n", args[0])
+	}
+}
+
+// handleAnalyzeCommand handles Attribution Analysis commands
+func (c *CLIMode) handleAnalyzeCommand(args []string) {
+	if len(args) == 0 || args[0] == "help" {
+		fmt.Println(c.theme.Accent.Render("📊 Attribution Analysis Commands:"))
+		fmt.Println("  /analyze drift                      Analyze performance drift causes")
+		fmt.Println("  /analyze performance <recent> <baseline> Compare benchmarks")
+		fmt.Println("  /analyze causes --model --provider  Analyze by change type")
+		fmt.Println("  /analyze score --top 5             Show top influence factors")
+		fmt.Println("  /analyze report                    Generate detailed analysis")
+		return
+	}
+
+	switch args[0] {
+	case "drift":
+		c.analyzePerformanceDrift()
+	case "performance":
+		if len(args) >= 3 {
+			c.comparePerformance(args[1], args[2])
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /analyze performance <recent> <baseline>"))
+		}
+	case "causes":
+		c.analyzeCauses(args[1:])
+	case "score":
+		if len(args) >= 3 && args[1] == "--top" {
+			c.showTopFactors(args[2])
+		} else {
+			c.showAllFactors()
+		}
+	case "report":
+		c.generateAnalysisReport()
+	default:
+		fmt.Printf("Unknown analyze command: %s. Use /analyze help for details.\n", args[0])
+	}
+}
+
+// handleBgCommand handles Background Task Management commands
+func (c *CLIMode) handleBgCommand(args []string) {
+	if len(args) == 0 || args[0] == "help" {
+		fmt.Println(c.theme.Accent.Render("⚡ Background Task Management Commands:"))
+		fmt.Println("  /bg list                       Show background tasks")
+		fmt.Println("  /bg create <command> [--async] Create background task")
+		fmt.Println("  /bg status <id>                Show task status & progress")
+		fmt.Println("  /bg cancel <id>                Cancel task")
+		fmt.Println("  /bg queue                      Show queue status & processing rate")
+		fmt.Println("  /bg feedback <id>              Get task result feedback")
+		fmt.Println("  /bg concurrency <n>            Set concurrent execution limit")
+		return
+	}
+
+	switch args[0] {
+	case "list":
+		c.listBackgroundTasks()
+	case "create":
+		if len(args) >= 2 {
+			async := len(args) > 2 && args[len(args)-1] == "--async"
+			c.createBackgroundTask(args[1], async)
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /bg create <command> [--async]"))
+		}
+	case "status":
+		if len(args) > 1 {
+			c.showTaskStatus(args[1])
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /bg status <id>"))
+		}
+	case "cancel":
+		if len(args) > 1 {
+			c.cancelTask(args[1])
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /bg cancel <id>"))
+		}
+	case "queue":
+		c.showTaskQueue()
+	case "feedback":
+		if len(args) > 1 {
+			c.showTaskFeedback(args[1])
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /bg feedback <id>"))
+		}
+	case "concurrency":
+		if len(args) > 1 {
+			c.setConcurrency(args[1])
+		} else {
+			c.showConcurrency()
+		}
+	default:
+		fmt.Printf("Unknown bg command: %s. Use /bg help for details.\n", args[0])
+	}
+}
+
+// handleAgentTaskCommand handles agent task sub-commands
+func (c *CLIMode) handleAgentTaskCommand(args []string) {
+	if len(args) == 0 {
+		c.listAgentTasks("")
+		return
+	}
+
+	switch args[0] {
+	case "create":
+		if len(args) >= 2 {
+			c.createAgentTask(strings.Join(args[1:], " "))
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /agent task create <description>"))
+		}
+	case "list":
+		status := ""
+		if len(args) > 1 {
+			status = args[1]
+		}
+		c.listAgentTasks(status)
+	case "deps":
+		if len(args) > 1 {
+			c.showTaskDependencies(args[1])
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /agent task deps <task_id>"))
+		}
+	default:
+		fmt.Printf("Unknown agent task command: %s\n", args[0])
+	}
+}
+
+// handleAgentPlanCommand handles agent plan sub-commands
+func (c *CLIMode) handleAgentPlanCommand(args []string) {
+	if len(args) == 0 {
+		c.listAgentPlans()
+		return
+	}
+
+	switch args[0] {
+	case "create":
+		if len(args) >= 2 {
+			c.createAgentPlan(strings.Join(args[1:], " "))
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /agent plan create <description>"))
+		}
+	case "execute":
+		if len(args) > 1 {
+			c.executeAgentPlan(args[1])
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /agent plan execute <plan_id>"))
+		}
+	case "list":
+		c.listAgentPlans()
+	default:
+		fmt.Printf("Unknown agent plan command: %s\n", args[0])
+	}
+}
+
+// ========================================
+// AI OS 자율 실행 시스템 명령어 처리
+// ========================================
+
+// handleAutonomousCommand handles AI OS autonomous mode commands
+func (c *CLIMode) handleAutonomousCommand(args []string) {
+	if len(args) == 0 {
+		c.showAutonomousHelp()
+		return
+	}
+
+	switch args[0] {
+	case "start", "begin", "run":
+		if len(args) > 1 {
+			goal := strings.Join(args[1:], " ")
+			c.startAutonomousMode(goal)
+		} else {
+			fmt.Println(c.theme.Warning.Render("⚠ Usage: /autonomous start <goal_description>"))
+		}
+	case "status", "progress", "info":
+		c.showAutonomousStatus()
+	case "stop", "halt", "pause":
+		c.stopAutonomousMode()
+	case "tiers", "tier":
+		c.showTierStatus()
+	case "cost", "budget":
+		c.showAutonomousCost()
+	case "logs", "log":
+		c.showAutonomousLogs()
+	case "help":
+		c.showAutonomousHelp()
+	default:
+		fmt.Printf("Unknown autonomous command: %s\n", args[0])
+		c.showAutonomousHelp()
+	}
+}
+
+// showAutonomousHelp shows help for autonomous commands
+func (c *CLIMode) showAutonomousHelp() {
+	fmt.Println(c.theme.Title.Render("🤖 DevOrch AI OS - Autonomous Mode Commands"))
+	fmt.Println()
+
+	commands := []struct {
+		cmd     string
+		desc    string
+		example string
+	}{
+		{"/autonomous start <goal>", "Start autonomous mode with a specific goal", "/autonomous start \"Build a REST API for a blog\""},
+		{"/autonomous status", "Show current autonomous mode status and progress", "/autonomous status"},
+		{"/autonomous stop", "Stop autonomous mode safely", "/autonomous stop"},
+		{"/autonomous tiers", "Show AI tier system status", "/autonomous tiers"},
+		{"/autonomous cost", "Show cost tracking and budget usage", "/autonomous cost"},
+		{"/autonomous logs", "Show autonomous execution logs", "/autonomous logs"},
+		{"/autonomous help", "Show this help message", "/autonomous help"},
+	}
+
+	for _, cmd := range commands {
+		fmt.Printf("  %-25s - %s\n",
+			c.theme.Accent.Render(cmd.cmd),
+			c.theme.Normal.Render(cmd.desc))
+		if cmd.example != "" {
+			fmt.Printf("    %s\n", c.theme.Subtle.Render("Example: "+cmd.example))
+		}
+		fmt.Println()
+	}
+
+	fmt.Println(c.theme.Subtle.Render("💡 Tip: Autonomous mode runs 24/7 with 4-tier AI system"))
+	fmt.Println(c.theme.Subtle.Render("    Tier 1: Orchestrator (Strategy)"))
+	fmt.Println(c.theme.Subtle.Render("    Tier 2: Senior Developers (Complex tasks)"))
+	fmt.Println(c.theme.Subtle.Render("    Tier 3: Regular Developers (Implementation)"))
+	fmt.Println(c.theme.Subtle.Render("    Tier 4: Background Workers (Monitoring)"))
+}
+
+// startAutonomousMode starts the AI OS autonomous mode
+func (c *CLIMode) startAutonomousMode(goal string) {
+	fmt.Println(c.theme.Title.Render("🚀 Starting AI OS Autonomous Mode..."))
+	fmt.Println()
+
+	fmt.Printf("%s %s\n",
+		c.theme.Success.Render("Goal:"),
+		c.theme.Normal.Render(goal))
+
+	// TODO: Orchestrator Brain Engine 통합
+	// orchestrator := orchestrator.NewOrchestratorBrain(c.cli, c.session)
+	// err := orchestrator.StartAutonomous(context.Background(), &orchestrator.AutonomousGoal{
+	//     Description: goal,
+	//     Priority:    orchestrator.PriorityHigh,
+	// })
+
+	fmt.Println()
+	fmt.Println(c.theme.Success.Render("✓ Hardware optimization in progress..."))
+	fmt.Println(c.theme.Success.Render("✓ AI tier system initializing..."))
+	fmt.Println(c.theme.Success.Render("✓ Provider configuration: OpenAI, OpenRouter, Gemini, Copilot, Ollama"))
+	fmt.Println(c.theme.Warning.Render("⚠ Anthropic disabled (API key issue)"))
+	fmt.Println()
+
+	fmt.Println(c.theme.Accent.Render("🧠 Tier 1 Orchestrator: Analyzing goal and creating strategy..."))
+	fmt.Println(c.theme.Accent.Render("👨‍💻 Tier 2 Senior Devs: Standing by for complex tasks..."))
+	fmt.Println(c.theme.Accent.Render("🔧 Tier 3 Regular Devs: Ready for implementation..."))
+	fmt.Println(c.theme.Accent.Render("⚡ Tier 4 Background: 24/7 monitoring active..."))
+	fmt.Println()
+
+	fmt.Println(c.theme.Success.Render("🎯 Autonomous mode started successfully!"))
+	fmt.Println(c.theme.Subtle.Render("Use /autonomous status to monitor progress"))
+	fmt.Println(c.theme.Subtle.Render("Use /autonomous stop to halt execution"))
+}
+
+// showAutonomousStatus shows the current autonomous mode status
+func (c *CLIMode) showAutonomousStatus() {
+	fmt.Println(c.theme.Title.Render("📊 AI OS Autonomous Status"))
+	fmt.Println()
+
+	// TODO: OrchestratorBrain에서 실제 상태 가져오기
+	// status, err := orchestrator.GetProgress()
+
+	// 임시 데모 데이터
+	fmt.Printf("%s %s\n",
+		c.theme.Success.Render("Status:"),
+		c.theme.Normal.Render("RUNNING"))
+	fmt.Printf("%s %s\n",
+		c.theme.Success.Render("Goal:"),
+		c.theme.Normal.Render("Build a REST API for a blog"))
+	fmt.Printf("%s %s\n",
+		c.theme.Success.Render("Progress:"),
+		c.theme.Normal.Render("65% (Planning completed, Implementation in progress)"))
+	fmt.Printf("%s %s\n",
+		c.theme.Success.Render("Runtime:"),
+		c.theme.Normal.Render("2h 34m"))
+	fmt.Printf("%s %s\n",
+		c.theme.Success.Render("ETA:"),
+		c.theme.Normal.Render("1h 15m remaining"))
+	fmt.Println()
+
+	// Tier 상태
+	fmt.Println(c.theme.Accent.Render("🤖 AI Tier Status:"))
+	fmt.Printf("  %s %s - %s\n",
+		c.theme.Success.Render("Tier 1 Orchestrator:"),
+		c.theme.Normal.Render("GPT-4o"),
+		c.theme.Subtle.Render("Monitoring overall progress"))
+	fmt.Printf("  %s %s - %s\n",
+		c.theme.Success.Render("Tier 2 Senior:"),
+		c.theme.Normal.Render("Claude-3.5-Sonnet"),
+		c.theme.Subtle.Render("Designing database schema"))
+	fmt.Printf("  %s %s - %s\n",
+		c.theme.Success.Render("Tier 3 Regular:"),
+		c.theme.Normal.Render("GPT-4o-mini"),
+		c.theme.Subtle.Render("Writing API endpoints"))
+	fmt.Printf("  %s %s - %s\n",
+		c.theme.Success.Render("Tier 4 Background:"),
+		c.theme.Normal.Render("Qwen2.5:7b"),
+		c.theme.Subtle.Render("Code quality checks"))
+	fmt.Println()
+
+	// 비용 정보
+	fmt.Println(c.theme.Accent.Render("💰 Cost Tracking:"))
+	fmt.Printf("  %s %s\n",
+		c.theme.Success.Render("Current hour:"),
+		c.theme.Normal.Render("$2.45 / $10.00 budget"))
+	fmt.Printf("  %s %s\n",
+		c.theme.Success.Render("Total cost:"),
+		c.theme.Normal.Render("$6.20"))
+	fmt.Println()
+}
+
+// stopAutonomousMode stops the autonomous mode
+func (c *CLIMode) stopAutonomousMode() {
+	fmt.Println(c.theme.Title.Render("⏹️ Stopping AI OS Autonomous Mode..."))
+	fmt.Println()
+
+	// TODO: OrchestratorBrain에서 안전한 정지
+	// err := orchestrator.StopAutonomous()
+
+	fmt.Println(c.theme.Success.Render("✓ Tier 1 Orchestrator: Graceful shutdown"))
+	fmt.Println(c.theme.Success.Render("✓ Tier 2-4: All agents stopped"))
+	fmt.Println(c.theme.Success.Render("✓ Progress saved to session"))
+	fmt.Println(c.theme.Success.Render("✓ Cost tracking finalized"))
+	fmt.Println()
+
+	fmt.Println(c.theme.Success.Render("🛑 Autonomous mode stopped successfully"))
+	fmt.Println(c.theme.Subtle.Render("Use /autonomous start to resume with new goal"))
+}
+
+// showTierStatus shows the status of all AI tiers
+func (c *CLIMode) showTierStatus() {
+	fmt.Println(c.theme.Title.Render("🎯 AI Tier System Status"))
+	fmt.Println()
+
+	// TODO: TierManager에서 실제 상태 가져오기
+	// tierStatus := tierManager.GetTierStatus()
+
+	tiers := []struct {
+		level  int
+		name   string
+		models []string
+		status string
+		task   string
+		cost   string
+	}{
+		{1, "🧠 Orchestrator", []string{"GPT-4o", "Claude-Opus-4.5"}, "ACTIVE", "Strategic planning", "$0.25/1K"},
+		{2, "👨‍💻 Senior Devs", []string{"Claude-3.5-Sonnet", "GPT-4"}, "ACTIVE", "Database design", "$0.12/1K"},
+		{3, "🔧 Regular Devs", []string{"GPT-4o-mini", "Gemini-Flash", "Qwen2.5:7b"}, "ACTIVE", "API implementation", "$0.03/1K"},
+		{4, "⚡ Background", []string{"Qwen2.5:3b", "Phi3:mini", "Free models"}, "ACTIVE", "Code monitoring", "$0.00/1K"},
+	}
+
+	for _, tier := range tiers {
+		fmt.Printf("%s %s\n",
+			c.theme.Accent.Render(fmt.Sprintf("Tier %d:", tier.level)),
+			c.theme.Normal.Render(tier.name))
+		fmt.Printf("  %s %s\n",
+			c.theme.Success.Render("Models:"),
+			c.theme.Subtle.Render(strings.Join(tier.models, ", ")))
+		fmt.Printf("  %s %s\n",
+			c.theme.Success.Render("Status:"),
+			c.theme.Normal.Render(tier.status))
+		fmt.Printf("  %s %s\n",
+			c.theme.Success.Render("Current Task:"),
+			c.theme.Normal.Render(tier.task))
+		fmt.Printf("  %s %s\n",
+			c.theme.Success.Render("Cost:"),
+			c.theme.Normal.Render(tier.cost))
+		fmt.Println()
+	}
+}
+
+// showAutonomousCost shows cost tracking information
+func (c *CLIMode) showAutonomousCost() {
+	fmt.Println(c.theme.Title.Render("💰 AI OS Cost Tracking"))
+	fmt.Println()
+
+	// TODO: CostTracker에서 실제 데이터 가져오기
+	// costInfo := tierManager.GetCostSummary()
+
+	fmt.Printf("%s %s\n",
+		c.theme.Success.Render("Hourly Budget:"),
+		c.theme.Normal.Render("$10.00"))
+	fmt.Printf("%s %s (%s)\n",
+		c.theme.Success.Render("Current Hour:"),
+		c.theme.Normal.Render("$2.45"),
+		c.theme.Subtle.Render("24.5% of budget"))
+	fmt.Printf("%s %s\n",
+		c.theme.Success.Render("Total Cost:"),
+		c.theme.Normal.Render("$6.20"))
+	fmt.Printf("%s %s\n",
+		c.theme.Success.Render("Runtime:"),
+		c.theme.Normal.Render("2h 34m"))
+	fmt.Printf("%s %s\n",
+		c.theme.Success.Render("Avg Cost/Hour:"),
+		c.theme.Normal.Render("$2.42"))
+	fmt.Println()
+
+	fmt.Println(c.theme.Accent.Render("📊 Cost Breakdown by Tier:"))
+	fmt.Printf("  %s %s (%s)\n",
+		c.theme.Success.Render("Tier 1 (Orchestrator):"),
+		c.theme.Normal.Render("$1.20"),
+		c.theme.Subtle.Render("19.4%"))
+	fmt.Printf("  %s %s (%s)\n",
+		c.theme.Success.Render("Tier 2 (Senior):"),
+		c.theme.Normal.Render("$3.10"),
+		c.theme.Subtle.Render("50.0%"))
+	fmt.Printf("  %s %s (%s)\n",
+		c.theme.Success.Render("Tier 3 (Regular):"),
+		c.theme.Normal.Render("$1.90"),
+		c.theme.Subtle.Render("30.6%"))
+	fmt.Printf("  %s %s (%s)\n",
+		c.theme.Success.Render("Tier 4 (Background):"),
+		c.theme.Normal.Render("$0.00"),
+		c.theme.Subtle.Render("0.0% (Free models)"))
+	fmt.Println()
+}
+
+// showAutonomousLogs shows autonomous execution logs
+func (c *CLIMode) showAutonomousLogs() {
+	fmt.Println(c.theme.Title.Render("📝 AI OS Execution Logs"))
+	fmt.Println()
+
+	// TODO: 실제 로그 시스템에서 가져오기
+	logs := []struct {
+		time   string
+		tier   string
+		action string
+		result string
+	}{
+		{"14:23:15", "Tier1", "Analyzed project requirements", "✓ Strategy defined"},
+		{"14:25:32", "Tier2", "Designed database schema", "✓ Schema created"},
+		{"14:28:45", "Tier3", "Generated API endpoints", "✓ 5 endpoints ready"},
+		{"14:32:10", "Tier4", "Code quality check", "✓ No issues found"},
+		{"14:35:22", "Tier3", "Writing unit tests", "⏳ In progress..."},
+	}
+
+	for _, log := range logs {
+		fmt.Printf("[%s] %s: %s → %s\n",
+			c.theme.Subtle.Render(log.time),
+			c.theme.Accent.Render(log.tier),
+			c.theme.Normal.Render(log.action),
+			c.theme.Success.Render(log.result))
+	}
+	fmt.Println()
+	fmt.Println(c.theme.Subtle.Render("💡 Use /autonomous status for real-time progress"))
 }

@@ -1,5 +1,11 @@
 package bandit
 
+import "errors"
+
+var (
+	ErrNoArms = errors.New("no arms available")
+)
+
 // ArmKey = context fingerprint + model/provider 등 선택 단위
 type ArmKey string
 

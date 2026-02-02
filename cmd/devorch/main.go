@@ -21,6 +21,16 @@ import (
 	"devorch/internal/tui"
 )
 
+// mapProviderName maps CLI provider names to internal provider names
+func mapProviderName(cliName string) string {
+	switch cliName {
+	case "github-copilot":
+		return "copilot"
+	default:
+		return cliName
+	}
+}
+
 func usage() {
 	fmt.Println(`devorch - local-first multi-LLM orchestrator
 
@@ -104,6 +114,11 @@ func main() {
 	}
 
 	switch cmd {
+	case "--cli":
+		// Start unified CLI mode
+		startCLI()
+		return
+
 	case "tui":
 		// Start TUI mode (bubbletea with alt screen)
 		startTUI()
@@ -238,7 +253,7 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		p, ok := deps.ProviderRegistry.GetProvider(*provName)
+		p, ok := deps.ProviderRegistry.GetProvider(mapProviderName(*provName))
 		if !ok {
 			fmt.Printf("provider not found: %s\n", *provName)
 			os.Exit(2)
@@ -294,7 +309,7 @@ func main() {
 			os.Exit(2)
 		}
 
-		p, ok := deps.ProviderRegistry.GetProvider(*provName)
+		p, ok := deps.ProviderRegistry.GetProvider(mapProviderName(*provName))
 		if !ok {
 			fmt.Printf("provider not found: %s\n", *provName)
 			os.Exit(2)
@@ -345,7 +360,7 @@ func main() {
 			os.Exit(2)
 		}
 
-		p, ok := deps.ProviderRegistry.GetProvider(*provName)
+		p, ok := deps.ProviderRegistry.GetProvider(mapProviderName(*provName))
 		if !ok {
 			fmt.Printf("provider not found: %s\n", *provName)
 			os.Exit(2)
@@ -427,11 +442,17 @@ func main() {
 	}
 }
 
-// startCLI starts the CLI mode (headless, direct terminal I/O)
+// startCLI starts the unified CLI mode (headless, direct terminal I/O)
 func startCLI() {
-	if err := tui.RunCLI(); err != nil {
-		theme := tui.DefaultTheme()
-		tui.PrintError(err, theme)
+	// Use new unified CLI for all cases
+	unifiedCLI, err := cli.NewUnifiedCLI()
+	if err != nil {
+		fmt.Printf("Failed to initialize unified CLI: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := unifiedCLI.Run(); err != nil {
+		fmt.Printf("CLI error: %v\n", err)
 		os.Exit(1)
 	}
 }
