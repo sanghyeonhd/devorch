@@ -235,7 +235,43 @@ pub fn detect_checks(dir: &Path) -> Vec<Check> {
     if has("pyproject.toml") || has("setup.py") || has("requirements.txt") {
         return vec![Check::required("tests", "python3", &["-m", "pytest", "-q"])];
     }
+
+    // A Python project without a manifest is still a Python project. A live
+    // mission failed here: an agent fixed the bug correctly, and the candidate
+    // was rejected as unverified because the repository had test files but no
+    // pyproject.toml for the manifest check to find.
+    if has_python_tests(dir) {
+        return vec![Check::required(
+            "tests",
+            "python3",
+            &["-m", "unittest", "-q"],
+        )];
+    }
+
     Vec::new()
+}
+
+/// Whether `dir` holds files that look like a Python test suite.
+///
+/// Only the top level and a `tests/` directory are examined: this is a cheap
+/// hint for the CLI, not a project scanner, and a mission may always be given
+/// explicit checks instead.
+fn has_python_tests(dir: &Path) -> bool {
+    let looks_like_test = |name: &str| {
+        name.ends_with(".py") && (name.starts_with("test_") || name.ends_with("_test.py"))
+    };
+
+    let scan = |path: &Path| {
+        std::fs::read_dir(path)
+            .map(|entries| {
+                entries
+                    .flatten()
+                    .any(|entry| looks_like_test(&entry.file_name().to_string_lossy()))
+            })
+            .unwrap_or(false)
+    };
+
+    scan(dir) || scan(&dir.join("tests"))
 }
 
 /// Paths that, if a project has them, hint at how it is tested.
@@ -356,5 +392,44 @@ mod tests {
         let checks = detect_checks(dir.path());
         assert!(checks.iter().any(|c| c.name == "tests" && c.required));
         assert!(checks.iter().any(|c| c.name == "lint" && !c.required));
+    }
+
+    #[test]
+    fn a_python_repository_without_a_manifest_is_still_detected() {
+        // Regression: a live mission rejected a correct fix as unverified
+        // because this repository shape produced no checks at all.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("calculator.py"),
+            "def add(a, b): return a + b\n",
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("test_calculator.py"), "import unittest\n").unwrap();
+
+        let checks = detect_checks(dir.path());
+        assert_eq!(checks.len(), 1);
+        assert_eq!(checks[0].program, "python3");
+        assert!(checks[0].args.contains(&"unittest".to_string()));
+    }
+
+    #[test]
+    fn tests_in_a_tests_subdirectory_are_detected() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("tests")).unwrap();
+        std::fs::write(dir.path().join("tests/test_thing.py"), "").unwrap();
+
+        assert_eq!(detect_checks(dir.path()).len(), 1);
+    }
+
+    #[test]
+    fn a_repository_with_no_recognisable_tests_yields_nothing_rather_than_a_guess() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("README.md"), "# docs only\n").unwrap();
+        std::fs::write(dir.path().join("helper.py"), "x = 1\n").unwrap();
+
+        assert!(
+            detect_checks(dir.path()).is_empty(),
+            "pretending to verify is worse than admitting there is nothing to run"
+        );
     }
 }

@@ -488,3 +488,48 @@ async fn a_mission_with_no_agents_fails_before_creating_anything() {
         assert!(store.workspaces().list(true).unwrap().is_empty());
     }
 }
+
+#[tokio::test]
+async fn a_repository_with_nothing_to_verify_fails_before_any_agent_runs() {
+    // Regression from a live run: with no detectable test command, every
+    // candidate was rejected as unverified *after* the agents had already been
+    // invoked. The cost of that mistake should be one error, not four runs.
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("repo");
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(&repo).unwrap();
+
+    let git = ProcessSpec::new("git")
+        .args(["init", "-b", "main"])
+        .cwd(&repo);
+    assert!(run(&git).await.unwrap().success());
+    for args in [
+        vec!["config", "user.email", "t@devorch.local"],
+        vec!["config", "user.name", "T"],
+    ] {
+        let spec = ProcessSpec::new("git").args(args).cwd(&repo);
+        assert!(run(&spec).await.unwrap().success());
+    }
+    std::fs::write(repo.join("README.md"), "docs only\n").unwrap();
+    for args in [vec!["add", "."], vec!["commit", "-m", "seed"]] {
+        let spec = ProcessSpec::new("git").args(args).cwd(&repo);
+        assert!(run(&spec).await.unwrap().success());
+    }
+
+    let store = Store::open(home.join("devorch3.db")).unwrap();
+    let executor = FakeExecutor::new().with(AgentKind::Codex, FakeBehavior::write("a.txt", "x"));
+    let runner = MissionRunner::with_executor(&store, config_in(&home), Box::new(executor));
+
+    // No explicit checks, and nothing detectable in the repository.
+    let request = MissionRequest::new("do something", &repo).agents(vec![AgentKind::Codex]);
+    let err = runner
+        .run(request, |_| {})
+        .await
+        .expect_err("should refuse");
+
+    assert!(matches!(err, MissionError::NoChecks), "got {err:?}");
+    assert!(
+        store.workspaces().list(true).unwrap().is_empty(),
+        "no worktree should have been created"
+    );
+}

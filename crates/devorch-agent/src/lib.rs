@@ -16,7 +16,7 @@ pub mod adapter;
 pub mod inspect;
 pub mod runner;
 
-pub use adapter::{AgentAdapter, ExecuteRequest, TerminalTracker};
+pub use adapter::{classify_failure, AgentAdapter, ExecuteRequest, TerminalTracker};
 pub use inspect::{inspect, inspect_all};
 pub use runner::{run_agent, AgentRun};
 

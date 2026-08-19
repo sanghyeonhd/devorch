@@ -41,6 +41,12 @@ pub enum MissionError {
     #[error("no agent is available to run this mission")]
     NoAgents,
 
+    #[error(
+        "no verification command could be detected for this repository; \
+         pass explicit checks so candidates can be judged on evidence"
+    )]
+    NoChecks,
+
     #[error("every candidate failed the deterministic gate")]
     NoWinner,
 
@@ -245,11 +251,20 @@ impl<'a> MissionRunner<'a> {
             return Err(MissionError::NoAgents);
         }
 
+        // Refuse before creating anything. A live mission burned four agent
+        // runs and then rejected every candidate as "not verified", because the
+        // repository had no detectable test command. Failing here costs one
+        // error message instead of four agent invocations.
         let checks = if request.checks.is_empty() {
             devorch_verify::detect_checks(repo.root())
         } else {
             request.checks.clone()
         };
+        if checks.is_empty() {
+            record.fail("no verification command could be detected");
+            MissionStore::new(self.store).update(&record)?;
+            return Err(MissionError::NoChecks);
+        }
 
         let root = self
             .config

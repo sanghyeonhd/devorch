@@ -1,0 +1,32 @@
+{"type":"available_commands","tools":["run_terminal_command","read_file","search_replace"],"commands":["compact","always-approve","context"]}
+{"type":"thought","data":"The"}
+{"type":"thought","data":" user"}
+{"type":"thought","data":" wants"}
+{"type":"thought","data":" me"}
+{"type":"thought","data":" to"}
+{"type":"thought","data":" reply"}
+{"type":"thought","data":" with"}
+{"type":"thought","data":" a"}
+{"type":"thought","data":" single"}
+{"type":"thought","data":" word"}
+{"type":"thought","data":":"}
+{"type":"thought","data":" ok"}
+{"type":"thought","data":"."}
+{"type":"thought","data":" This"}
+{"type":"thought","data":" is"}
+{"type":"thought","data":" a"}
+{"type":"thought","data":" very"}
+{"type":"thought","data":" simple"}
+{"type":"thought","data":" request"}
+{"type":"thought","data":" -"}
+{"type":"thought","data":" I"}
+{"type":"thought","data":" should"}
+{"type":"thought","data":" just"}
+{"type":"thought","data":" respond"}
+{"type":"thought","data":" with"}
+{"type":"thought","data":" \""}
+{"type":"thought","data":"ok"}
+{"type":"thought","data":"\"."}
+{"type":"text","data":"ok"}
+{"type":"usage","usage":{"input_tokens":9116,"output_tokens":36,"cache_read_input_tokens":9472,"cache_creation_input_tokens":0,"reasoning_tokens":31},"signature":"W5C5xz0VPZ/1KEhK+mu40XVN/VA6Qc7/RY7KuV0HYdcE+svqX+j6KHBGQt5DrEddRERx0tvcFwUKxuW/X5j6lrI1AMdoC3o0GoaRPe1COHDkR+SZKSVIToNeIptmqlYY6Jk805dlRxC4bpPV97bOUwRlS9DgxbaIWWo/mk2uurLtd0W8uG7kZGO6wycQ0Vo"}
+{"type":"end","stopReason":"end_turn","sessionId":"01a018fc-58f4-7e10-903b-c0178cf04595","requestId":"26babf2c-075d-484b-a58c-e0a00f2c98e9","usage":{"input_tokens":9116,"cache_read_input_tokens":9472,"cache_creation_input_tokens":0,"output_tokens":36,"reasoning_tokens":31,"total_tokens":18624},"num_turns":1,"total_cost_usd":0.00394128,"total_cost_usd_ticks":39412800,"modelUsage":{"grok-4.6-build":{"inputTokens":9116,"outputTokens":36,"cacheReadInputTokens":9472,"cacheCreationInputTokens":0,"modelCalls":1,"costUSD":0.00394128}}}

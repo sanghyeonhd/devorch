@@ -3,16 +3,24 @@
 //! Drives `grok -p --output-format streaming-json`, which emits NDJSON of the
 //! agent's native ACP session updates: `text`, `thought`, `tool_call`,
 //! `tool_call_update`, `plan`, `usage`, `available_commands`, `end`, `error`.
+//!
+//! The field shapes here were corrected against a real captured session
+//! (`testdata/agents/grok/live-simple.jsonl`). Grok puts chunk text in a bare
+//! `data` string rather than a `text` field, and reports its session id and
+//! cost only on the final `end` event — both of which the documented schema
+//! alone would have got wrong.
 
 use std::collections::HashMap;
 
-use devorch_agent::adapter::{parse_json_line, AgentAdapter, ExecuteRequest, TerminalTracker};
+use devorch_agent::adapter::{
+    classify_failure, parse_json_line, AgentAdapter, ExecuteRequest, TerminalTracker,
+};
 use devorch_process::ProcessSpec;
 use devorch_protocol::event::{
     Completed, Failed, PlanStep, PlanStepStatus, PlanUpdated, SessionStarted, TextDelta,
     ToolCompleted, ToolStarted, ToolUpdated, Usage,
 };
-use devorch_protocol::{AgentEvent, AgentKind, AgentRuntimeMode, FailureClass};
+use devorch_protocol::{AgentEvent, AgentKind, AgentRuntimeMode};
 use serde_json::Value;
 
 /// Normalizes the `grok --output-format streaming-json` stream.
@@ -77,7 +85,8 @@ impl AgentAdapter for GrokAdapter {
             events.push(AgentEvent::SessionStarted(SessionStarted {
                 agent: AgentKind::Grok,
                 mode: AgentRuntimeMode::OneShotStructured,
-                vendor_session_id: str_field(&value, "session_id"),
+                vendor_session_id: str_field(&value, "session_id")
+                    .or_else(|| str_field(&value, "sessionId")),
                 model: str_field(&value, "model"),
             }));
         }
@@ -173,18 +182,28 @@ impl AgentAdapter for GrokAdapter {
 
             "end" => {
                 self.terminal.mark();
+                // `end` carries the authoritative usage and the only cost Grok
+                // reports, so it is emitted even though a `usage` event may
+                // already have appeared mid-stream.
+                if value.get("usage").is_some() || value.get("total_cost_usd").is_some() {
+                    events.push(usage_event(&value));
+                }
                 events.push(AgentEvent::Completed(Completed {
-                    summary: str_field(&value, "result").or_else(|| str_field(&value, "text")),
+                    summary: str_field(&value, "result")
+                        .or_else(|| str_field(&value, "text"))
+                        .or_else(|| str_field(&value, "stopReason")),
                 }));
             }
 
             "error" => {
                 self.terminal.mark();
+                let message = str_field(&value, "message")
+                    .or_else(|| str_field(&value, "error"))
+                    .or_else(|| str_field(&value, "data"))
+                    .unwrap_or_else(|| "grok reported an error".into());
                 events.push(AgentEvent::Failed(Failed {
-                    message: str_field(&value, "message")
-                        .or_else(|| str_field(&value, "error"))
-                        .unwrap_or_else(|| "grok reported an error".into()),
-                    class: classify(&value),
+                    class: classify_failure(&message),
+                    message,
                 }));
             }
 
@@ -201,27 +220,6 @@ impl AgentAdapter for GrokAdapter {
     }
 }
 
-/// Map a vendor error onto the bounded failure taxonomy.
-fn classify(value: &Value) -> FailureClass {
-    let text = value
-        .get("message")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-
-    if text.contains("rate limit") || text.contains("429") {
-        FailureClass::ModelRateLimit
-    } else if text.contains("unauthor") || text.contains("api key") || text.contains("login") {
-        FailureClass::AgentAuth
-    } else if text.contains("permission") || text.contains("denied") {
-        FailureClass::PermissionDenied
-    } else if text.contains("network") || text.contains("connect") {
-        FailureClass::NetworkFailure
-    } else {
-        FailureClass::AgentProtocol
-    }
-}
-
 /// The tool call identifier, under whichever key this version uses.
 fn call_id_of(value: &Value) -> String {
     str_field(value, "id")
@@ -230,11 +228,21 @@ fn call_id_of(value: &Value) -> String {
         .unwrap_or_else(|| "tool".into())
 }
 
-/// The textual payload of a chunk, under whichever key this version uses.
+/// The textual payload of a chunk.
+///
+/// A live session sends `{"type":"text","data":"ok"}` — the payload is a bare
+/// string under `data`. The other spellings are kept as fallbacks so a future
+/// version that nests it does not go silent.
 fn text_of(value: &Value) -> Option<String> {
-    str_field(value, "text")
+    value
+        .get("data")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .or_else(|| str_field(value, "text"))
         .or_else(|| str_field(value, "content"))
         .or_else(|| value.get("content").and_then(|c| str_field(c, "text")))
+        .or_else(|| value.get("data").and_then(|d| str_field(d, "text")))
 }
 
 /// Read a string field, treating an empty string as absent.
@@ -247,13 +255,19 @@ fn str_field(value: &Value, key: &str) -> Option<String> {
 }
 
 /// Map Grok token accounting.
+///
+/// Cost lives on the outer event, tokens on the nested `usage` object; a live
+/// `end` event carries both.
 fn usage_event(value: &Value) -> AgentEvent {
     let usage = value.get("usage").unwrap_or(value);
     let num = |key: &str| usage.get(key).and_then(Value::as_u64);
     AgentEvent::Usage(Usage {
         input_tokens: num("input_tokens").or_else(|| num("prompt_tokens")),
         output_tokens: num("output_tokens").or_else(|| num("completion_tokens")),
-        cached_input_tokens: num("cached_input_tokens"),
-        cost_usd: usage.get("cost_usd").and_then(Value::as_f64),
+        cached_input_tokens: num("cache_read_input_tokens").or_else(|| num("cached_input_tokens")),
+        cost_usd: value
+            .get("total_cost_usd")
+            .or_else(|| usage.get("cost_usd"))
+            .and_then(Value::as_f64),
     })
 }

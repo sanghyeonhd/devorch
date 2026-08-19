@@ -9,12 +9,14 @@
 
 use std::collections::HashMap;
 
-use devorch_agent::adapter::{parse_json_line, AgentAdapter, ExecuteRequest, TerminalTracker};
+use devorch_agent::adapter::{
+    classify_failure, parse_json_line, AgentAdapter, ExecuteRequest, TerminalTracker,
+};
 use devorch_process::ProcessSpec;
 use devorch_protocol::event::{
     Completed, Failed, SessionStarted, TextDelta, ToolCompleted, ToolStarted, Usage,
 };
-use devorch_protocol::{AgentEvent, AgentKind, AgentRuntimeMode, FailureClass};
+use devorch_protocol::{AgentEvent, AgentKind, AgentRuntimeMode};
 use serde_json::Value;
 
 /// Normalizes the `gemini --output-format stream-json` stream.
@@ -143,11 +145,12 @@ impl AgentAdapter for GeminiAdapter {
 
             "error" => {
                 self.terminal.mark();
+                let message = str_field(&value, "message")
+                    .or_else(|| value.get("error").and_then(|e| str_field(e, "message")))
+                    .unwrap_or_else(|| "gemini reported an error".into());
                 vec![AgentEvent::Failed(Failed {
-                    message: str_field(&value, "message")
-                        .or_else(|| value.get("error").and_then(|e| str_field(e, "message")))
-                        .unwrap_or_else(|| "gemini reported an error".into()),
-                    class: classify(&value),
+                    class: classify_failure(&message),
+                    message,
                 })]
             }
 
@@ -157,27 +160,6 @@ impl AgentAdapter for GeminiAdapter {
 
     fn finalize(&mut self, exit_code: Option<i32>) -> Vec<AgentEvent> {
         self.terminal.finalize(exit_code)
-    }
-}
-
-/// Map a vendor error onto the bounded failure taxonomy.
-fn classify(value: &Value) -> FailureClass {
-    let text = value
-        .get("message")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-
-    if text.contains("quota") || text.contains("rate limit") || text.contains("429") {
-        FailureClass::ModelRateLimit
-    } else if text.contains("auth") || text.contains("credential") || text.contains("api key") {
-        FailureClass::AgentAuth
-    } else if text.contains("permission") {
-        FailureClass::PermissionDenied
-    } else if text.contains("network") || text.contains("fetch") {
-        FailureClass::NetworkFailure
-    } else {
-        FailureClass::AgentProtocol
     }
 }
 

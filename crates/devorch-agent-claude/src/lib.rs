@@ -12,7 +12,9 @@
 
 use std::collections::HashMap;
 
-use devorch_agent::adapter::{parse_json_line, AgentAdapter, ExecuteRequest, TerminalTracker};
+use devorch_agent::adapter::{
+    classify_failure, parse_json_line, AgentAdapter, ExecuteRequest, TerminalTracker,
+};
 use devorch_process::ProcessSpec;
 use devorch_protocol::event::{
     Completed, Failed, SessionStarted, TextDelta, ToolCompleted, ToolStarted, Usage,
@@ -105,14 +107,17 @@ impl AgentAdapter for ClaudeAdapter {
                     || value.get("subtype").and_then(Value::as_str) == Some("error");
 
                 if is_error {
+                    let message = str_field(&value, "result")
+                        .or_else(|| str_field(&value, "error"))
+                        .unwrap_or_else(|| "claude reported an error".into());
                     events.push(AgentEvent::Failed(Failed {
-                        message: str_field(&value, "result")
-                            .or_else(|| str_field(&value, "error"))
-                            .unwrap_or_else(|| "claude reported an error".into()),
+                        // The turn-limit subtype is explicit, so it beats
+                        // whatever the message wording suggests.
                         class: match value.get("subtype").and_then(Value::as_str) {
                             Some("error_max_turns") => FailureClass::BudgetExceeded,
-                            _ => FailureClass::ToolFailure,
+                            _ => classify_failure(&message),
                         },
+                        message,
                     }));
                 } else {
                     events.push(AgentEvent::Completed(Completed {

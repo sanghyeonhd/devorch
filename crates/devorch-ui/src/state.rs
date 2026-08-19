@@ -81,6 +81,35 @@ impl RunProgress {
             self.log.drain(..excess);
         }
     }
+
+    /// Append assistant text, continuing the previous line when it came from
+    /// the same agent.
+    ///
+    /// Agents stream a delta per word. One log line per delta turns a two
+    /// sentence answer into forty lines, so consecutive text from one agent is
+    /// joined into the line it started.
+    pub fn push_text(&mut self, prefix: &str, text: &str) {
+        let text = text.trim_end_matches('\n');
+        if text.is_empty() {
+            return;
+        }
+
+        match self.log.last_mut() {
+            Some(last) if last.starts_with(prefix) && !last.ends_with('\u{2003}') => {
+                last.push_str(text);
+            }
+            _ => self.push(format!("{prefix}{text}")),
+        }
+    }
+
+    /// Mark the current line finished, so the next text starts a new one.
+    pub fn end_line(&mut self) {
+        if let Some(last) = self.log.last_mut() {
+            if !last.ends_with('\u{2003}') {
+                last.push('\u{2003}');
+            }
+        }
+    }
 }
 
 /// The form backing the "new mission" panel.
@@ -341,6 +370,37 @@ mod tests {
             .last()
             .unwrap()
             .contains(&format!("line {}", RunProgress::MAX_LINES + 249)));
+    }
+
+    #[test]
+    fn consecutive_text_from_one_agent_joins_into_one_line() {
+        // Agents stream a delta per word; the log must read as sentences.
+        let mut progress = RunProgress::default();
+        for word in ["I'll ", "fix ", "add()."] {
+            progress.push_text("[grok] ", word);
+        }
+
+        assert_eq!(progress.log.len(), 1);
+        assert_eq!(progress.log[0], "[grok] I'll fix add().");
+    }
+
+    #[test]
+    fn text_from_a_different_agent_starts_a_new_line() {
+        let mut progress = RunProgress::default();
+        progress.push_text("[grok] ", "one");
+        progress.push_text("[codex] ", "two");
+
+        assert_eq!(progress.log.len(), 2);
+    }
+
+    #[test]
+    fn a_finished_line_is_not_continued_by_later_text() {
+        let mut progress = RunProgress::default();
+        progress.push_text("[grok] ", "first answer");
+        progress.end_line();
+        progress.push_text("[grok] ", "second answer");
+
+        assert_eq!(progress.log.len(), 2, "{:?}", progress.log);
     }
 
     #[test]

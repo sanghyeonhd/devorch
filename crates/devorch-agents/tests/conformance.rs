@@ -238,3 +238,150 @@ fn adapters_never_shell_out_and_always_run_inside_the_given_worktree() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Live-captured streams.
+//
+// The fixtures above were written from published schemas. These were captured
+// by actually running the CLIs, and each one corrected a real defect that the
+// documented schema alone did not reveal. They are kept verbatim so a future
+// change to an adapter has to keep working against what the tools really emit.
+// ---------------------------------------------------------------------------
+
+/// Replay a named fixture, as the runner would.
+fn replay_named(agent: AgentKind, name: &str, exit_code: Option<i32>) -> Vec<AgentEvent> {
+    let mut adapter = adapter_for(agent).expect("adapter exists");
+    let mut events = Vec::new();
+    for line in fixture(agent, name) {
+        events.extend(adapter.normalize(&line));
+    }
+    events.extend(adapter.finalize(exit_code));
+    events
+}
+
+#[test]
+fn a_real_grok_session_yields_its_answer_its_usage_and_its_cost() {
+    // Captured from `grok -p ... --output-format streaming-json`. Grok puts
+    // chunk text in a bare `data` string, which the documented `text` field
+    // would have missed entirely — the adapter produced no answer at all before
+    // this fixture existed.
+    let events = replay_named(AgentKind::Grok, "live-simple", Some(0));
+
+    let answer: String = events
+        .iter()
+        .filter_map(|e| match e {
+            AgentEvent::TextDelta(t) if !t.reasoning => Some(t.text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(answer, "ok", "the assistant's answer must be recovered");
+
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, AgentEvent::TextDelta(t) if t.reasoning)),
+        "thought chunks must be flagged as reasoning"
+    );
+
+    let usage = events
+        .iter()
+        .filter_map(|e| match e {
+            AgentEvent::Usage(u) => Some(u),
+            _ => None,
+        })
+        .next_back()
+        .expect("usage was reported");
+    assert_eq!(usage.input_tokens, Some(9116));
+    assert_eq!(usage.output_tokens, Some(36));
+    assert_eq!(usage.cached_input_tokens, Some(9472));
+    // Grok reports real cost on `end`; it must be carried, not dropped.
+    assert_eq!(usage.cost_usd, Some(0.00394128));
+
+    assert!(matches!(events.last(), Some(AgentEvent::Completed(_))));
+}
+
+#[test]
+fn a_real_codex_usage_limit_is_classified_as_a_rate_limit_not_a_protocol_error() {
+    // Captured from `codex exec --json` after the account hit its usage limit.
+    use devorch_protocol::FailureClass;
+
+    let events = replay_named(AgentKind::Codex, "live-usage-limit", Some(1));
+
+    match events.last() {
+        Some(AgentEvent::Failed(f)) => assert_eq!(
+            f.class,
+            FailureClass::ModelRateLimit,
+            "a usage limit is retryable later; a protocol error is not"
+        ),
+        other => panic!("expected a failure, got {other:?}"),
+    }
+}
+
+#[test]
+fn an_advisory_item_error_does_not_end_a_codex_session() {
+    // The same live capture carries an item-level error about shortened skill
+    // descriptions — a warning, mid-run. If that ended the session, a healthy
+    // run that happened to emit one would be reported as failed.
+    let mut adapter = adapter_for(AgentKind::Codex).expect("adapter exists");
+
+    let mut events = Vec::new();
+    for line in [
+        r#"{"type":"thread.started","thread_id":"th_1"}"#,
+        r#"{"type":"turn.started"}"#,
+        r#"{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Skill descriptions were shortened to fit the context budget."}}"#,
+        r#"{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Done."}}"#,
+    ] {
+        events.extend(adapter.normalize(line));
+    }
+    events.extend(adapter.finalize(Some(0)));
+
+    assert!(
+        matches!(events.last(), Some(AgentEvent::Completed(_))),
+        "an advisory item error must not end the session: {:?}",
+        events.last()
+    );
+}
+
+#[test]
+fn a_real_claude_session_yields_its_answer_its_model_and_its_reported_cost() {
+    // Captured from `claude -p ... --output-format stream-json --verbose`.
+    // The live stream carries event types the published schema does not mention
+    // — `rate_limit_event` and a `post_turn_summary` system line — and its
+    // `result` line has no `subtype` at all. All three must pass through
+    // harmlessly.
+    let events = replay_named(AgentKind::Claude, "live-simple", Some(0));
+
+    match events.first() {
+        Some(AgentEvent::SessionStarted(s)) => {
+            assert_eq!(s.agent, AgentKind::Claude);
+            assert_eq!(s.model.as_deref(), Some("claude-sonnet-5"));
+            assert!(s.vendor_session_id.is_some(), "the session id must be kept");
+        }
+        other => panic!("expected SessionStarted, got {other:?}"),
+    }
+
+    let answer: String = events
+        .iter()
+        .filter_map(|e| match e {
+            AgentEvent::TextDelta(t) if !t.reasoning => Some(t.text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(answer, "ok");
+
+    let usage = events
+        .iter()
+        .filter_map(|e| match e {
+            AgentEvent::Usage(u) => Some(u),
+            _ => None,
+        })
+        .next_back()
+        .expect("usage was reported");
+    assert_eq!(usage.input_tokens, Some(2));
+    assert_eq!(usage.output_tokens, Some(4));
+    assert_eq!(usage.cached_input_tokens, Some(30069));
+    assert!(usage.cost_usd.unwrap() > 0.0, "real cost must be carried");
+
+    // A `result` line with is_error false and no subtype is a success.
+    assert!(matches!(events.last(), Some(AgentEvent::Completed(_))));
+}

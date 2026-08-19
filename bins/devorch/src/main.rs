@@ -80,6 +80,12 @@ enum MissionCommand {
         /// Per-agent wall-clock ceiling, in seconds.
         #[arg(long)]
         timeout: Option<u64>,
+        /// Verification command, repeatable. Overrides project detection.
+        ///
+        /// Written as a plain command line: `--check "cargo test --workspace"`.
+        /// A candidate that fails any of these cannot win.
+        #[arg(long = "check")]
+        checks: Vec<String>,
         /// Compare candidates but do not merge.
         #[arg(long)]
         dry_run: bool,
@@ -419,6 +425,20 @@ async fn doctor(config: &Config, config_path: &PathBuf, json: bool) -> Result<()
     Ok(())
 }
 
+/// Parse a `--check "program args..."` flag into a required check.
+///
+/// Split on whitespace rather than run through a shell: a verification command
+/// is executed directly, so a repository cannot smuggle a pipeline or a
+/// redirect into the gate that judges it.
+fn parse_check(raw: &str) -> Result<devorch_verify::Check> {
+    let mut parts = raw.split_whitespace();
+    let program = parts
+        .next()
+        .with_context(|| format!("empty --check value: {raw:?}"))?;
+    let args: Vec<&str> = parts.collect();
+    Ok(devorch_verify::Check::required(program, program, &args))
+}
+
 /// Parse the `--risk` flag.
 fn parse_risk(raw: &str) -> Result<TaskRisk> {
     match raw.trim().to_ascii_lowercase().as_str() {
@@ -442,6 +462,7 @@ async fn mission(command: MissionCommand, mut config: Config, json: bool) -> Res
             max_parallel,
             owned_paths,
             timeout,
+            checks,
             dry_run,
         } => {
             if let Some(max) = max_parallel {
@@ -461,13 +482,20 @@ async fn mission(command: MissionCommand, mut config: Config, json: bool) -> Res
                 agents,
                 owned_paths,
                 agent_timeout: timeout.map(std::time::Duration::from_secs),
+                checks: checks
+                    .iter()
+                    .map(|raw| parse_check(raw))
+                    .collect::<Result<Vec<_>>>()?,
                 dry_run,
                 ..MissionRequest::new(goal, repo).risk(parse_risk(&risk)?)
             };
 
             let runner = MissionRunner::new(&store, config);
+            let mut text = TextBuffer::default();
             let outcome = runner
-                .run(request, |progress| report_progress(&progress, json))
+                .run(request, |progress| {
+                    report_progress(&progress, &mut text, json)
+                })
                 .await;
 
             match outcome {
@@ -568,15 +596,68 @@ fn short(sha: &str) -> &str {
     &sha[..12.min(sha.len())]
 }
 
+/// Accumulates token-level text deltas so the log reads as sentences.
+///
+/// Grok streams a delta per word; printing one line each turns a two-sentence
+/// answer into forty lines of noise. Deltas are buffered and flushed on a
+/// sentence boundary or when the agent moves on to something else.
+#[derive(Default)]
+struct TextBuffer {
+    agent: Option<AgentKind>,
+    buffer: String,
+}
+
+impl TextBuffer {
+    /// Add a delta, returning a line when one is ready to print.
+    fn push(&mut self, agent: AgentKind, text: &str) -> Option<String> {
+        let flushed = (self.agent != Some(agent)).then(|| self.flush()).flatten();
+        self.agent = Some(agent);
+        self.buffer.push_str(text);
+
+        if flushed.is_some() {
+            return flushed;
+        }
+        // Flush on a sentence end, or when the buffer grows past a comfortable
+        // line, so a long answer still appears while it is being written.
+        let ends_sentence = self.buffer.trim_end().ends_with(['.', '!', '?', '\n']);
+        if ends_sentence || self.buffer.len() > 160 {
+            return self.flush();
+        }
+        None
+    }
+
+    /// Emit whatever is buffered.
+    fn flush(&mut self) -> Option<String> {
+        let agent = self.agent?;
+        let text = self.buffer.trim().to_string();
+        self.buffer.clear();
+        (!text.is_empty()).then(|| format!("  [{agent}] {text}"))
+    }
+}
+
 /// Stream mission progress to the terminal.
 ///
 /// Suppressed under `--json` so the structured result stays the only thing on
 /// stdout and remains parseable.
-fn report_progress(progress: &devorch_mission::MissionProgress<'_>, json: bool) {
+fn report_progress(
+    progress: &devorch_mission::MissionProgress<'_>,
+    text: &mut TextBuffer,
+    json: bool,
+) {
     use devorch_mission::MissionProgress;
 
     if json {
         return;
+    }
+
+    // Anything that is not more assistant text ends the current sentence.
+    if !matches!(
+        progress,
+        MissionProgress::AgentEvent(_, AgentEvent::TextDelta(_))
+    ) {
+        if let Some(line) = text.flush() {
+            println!("{line}");
+        }
     }
 
     match progress {
@@ -600,9 +681,8 @@ fn report_progress(progress: &devorch_mission::MissionProgress<'_>, json: bool) 
             // thinking, not its answer.
             if let AgentEvent::TextDelta(t) = event {
                 if !t.reasoning {
-                    let line = t.text.trim();
-                    if !line.is_empty() {
-                        println!("  [{agent}] {line}");
+                    if let Some(line) = text.push(*agent, &t.text) {
+                        println!("{line}");
                     }
                 }
             }

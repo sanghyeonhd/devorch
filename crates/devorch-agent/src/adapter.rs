@@ -139,6 +139,54 @@ impl TerminalTracker {
     }
 }
 
+/// Map a vendor error message onto the bounded failure taxonomy.
+///
+/// Every vendor words its errors differently, but the categories a mission has
+/// to react to are the same: a rate limit is worth retrying later, an auth
+/// failure is not worth retrying at all, and a protocol error means the adapter
+/// or the CLI changed. Keeping the mapping in one place is what stops four
+/// adapters from disagreeing about what "quota" means.
+pub fn classify_failure(message: &str) -> devorch_protocol::FailureClass {
+    use devorch_protocol::FailureClass;
+
+    let text = message.to_ascii_lowercase();
+
+    // Usage limits come first: "usage limit" messages often also mention an
+    // upgrade link, which would otherwise read as an auth problem.
+    if text.contains("rate limit")
+        || text.contains("usage limit")
+        || text.contains("quota")
+        || text.contains("429")
+        || text.contains("too many requests")
+        || text.contains("try again at")
+    {
+        return FailureClass::ModelRateLimit;
+    }
+    if text.contains("unauthor")
+        || text.contains("api key")
+        || text.contains("not logged in")
+        || text.contains("authentication")
+        || text.contains("credential")
+        || text.contains("sign in")
+    {
+        return FailureClass::AgentAuth;
+    }
+    if text.contains("permission") || text.contains("denied") || text.contains("sandbox") {
+        return FailureClass::PermissionDenied;
+    }
+    if text.contains("network")
+        || text.contains("connection")
+        || text.contains("timed out")
+        || text.contains("dns")
+    {
+        return FailureClass::NetworkFailure;
+    }
+    if text.contains("test") && text.contains("fail") {
+        return FailureClass::TestFailure;
+    }
+    FailureClass::AgentProtocol
+}
+
 /// Parse a line as JSON, ignoring blanks and non-JSON noise.
 ///
 /// CLIs interleave human-readable notices with their structured stream. Those
@@ -163,6 +211,41 @@ mod tests {
         assert!(parse_json_line("warning: update available").is_none());
         assert!(parse_json_line("{ not json }").is_none());
         assert!(parse_json_line(r#"{"type":"ok"}"#).is_some());
+    }
+
+    #[test]
+    fn a_real_usage_limit_message_is_classified_as_a_rate_limit() {
+        // Captured verbatim from a live `codex exec --json` run.
+        let message = "You've hit your usage limit. Upgrade to Pro \
+                       (https://chatgpt.com/explore/pro), visit \
+                       https://chatgpt.com/codex/settings/usage to purchase more credits or \
+                       try again at Aug 20th, 2026 7:34 PM.";
+        assert_eq!(classify_failure(message), FailureClass::ModelRateLimit);
+    }
+
+    #[test]
+    fn failure_classes_are_distinguished_by_wording() {
+        assert_eq!(
+            classify_failure("Quota exceeded for the current project"),
+            FailureClass::ModelRateLimit
+        );
+        assert_eq!(
+            classify_failure("Unauthorized: please sign in"),
+            FailureClass::AgentAuth
+        );
+        assert_eq!(
+            classify_failure("sandbox denied write outside the workspace"),
+            FailureClass::PermissionDenied
+        );
+        assert_eq!(
+            classify_failure("connection reset"),
+            FailureClass::NetworkFailure
+        );
+        // Anything unrecognised is a protocol problem, not a guess.
+        assert_eq!(
+            classify_failure("something entirely new"),
+            FailureClass::AgentProtocol
+        );
     }
 
     #[test]

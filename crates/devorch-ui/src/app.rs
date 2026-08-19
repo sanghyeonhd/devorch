@@ -20,6 +20,9 @@ use crate::{theme, views};
 enum Update {
     /// A line of progress.
     Log(String),
+    /// Assistant text, which continues the previous line when it is the same
+    /// agent still speaking.
+    Text { prefix: String, text: String },
     /// The mission ended; the payload is the error, if it failed.
     Finished(Option<String>),
 }
@@ -147,8 +150,8 @@ impl DevorchApp {
 
             let runner = MissionRunner::new(&guard, config);
             let outcome = handle.block_on(runner.run(request, |progress| {
-                if let Some(line) = describe(&progress) {
-                    let _ = sender.send(Update::Log(line));
+                if let Some(update) = describe(&progress) {
+                    let _ = sender.send(update);
                     ctx.request_repaint();
                 }
             }));
@@ -189,7 +192,11 @@ impl DevorchApp {
         let mut finished = false;
         while let Ok(update) = self.updates.1.try_recv() {
             match update {
-                Update::Log(line) => self.state.progress.push(line),
+                Update::Log(line) => {
+                    self.state.progress.end_line();
+                    self.state.progress.push(line);
+                }
+                Update::Text { prefix, text } => self.state.progress.push_text(&prefix, &text),
                 Update::Finished(error) => {
                     self.state.progress.running = false;
                     if let Some(error) = error {
@@ -258,16 +265,28 @@ impl eframe::App for DevorchApp {
     }
 }
 
-/// Render mission progress as one log line, or `None` for events the log does
+/// Render mission progress as a log update, or `None` for events the log does
 /// not show.
 ///
 /// Reasoning text is deliberately excluded: it is the model's private thinking,
 /// not its answer, and the UI must not present it as one.
-fn describe(progress: &devorch_mission::MissionProgress<'_>) -> Option<String> {
+fn describe(progress: &devorch_mission::MissionProgress<'_>) -> Option<Update> {
     use devorch_mission::MissionProgress;
     use devorch_protocol::AgentEvent;
 
-    Some(match progress {
+    // Assistant text arrives a word at a time and continues the line it
+    // started; everything else is a whole line of its own.
+    if let MissionProgress::AgentEvent(agent, AgentEvent::TextDelta(t)) = progress {
+        if t.reasoning || t.text.trim().is_empty() {
+            return None;
+        }
+        return Some(Update::Text {
+            prefix: format!("[{agent}] "),
+            text: t.text.clone(),
+        });
+    }
+
+    Some(Update::Log(match progress {
         MissionProgress::Planned(plan) => {
             let names: Vec<_> = plan.candidates.iter().map(|a| a.as_str()).collect();
             format!(
@@ -281,9 +300,6 @@ fn describe(progress: &devorch_mission::MissionProgress<'_>) -> Option<String> {
             format!("{agent} started in {workspace}")
         }
         MissionProgress::AgentEvent(agent, event) => match event {
-            AgentEvent::TextDelta(t) if !t.reasoning && !t.text.trim().is_empty() => {
-                format!("[{agent}] {}", t.text.trim())
-            }
             AgentEvent::ToolStarted(t) => format!("[{agent}] {}", t.name),
             AgentEvent::Failed(f) => format!("[{agent}] failed: {}", f.message),
             _ => return None,
@@ -310,5 +326,5 @@ fn describe(progress: &devorch_mission::MissionProgress<'_>) -> Option<String> {
             "post-merge gate: {}",
             if report.passed() { "passed" } else { "FAILED" }
         ),
-    })
+    }))
 }

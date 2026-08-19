@@ -8,7 +8,9 @@
 //! Devorch domain types are deliberately not coupled to this schema: everything
 //! Codex-shaped stops at this file.
 
-use devorch_agent::adapter::{parse_json_line, AgentAdapter, ExecuteRequest, TerminalTracker};
+use devorch_agent::adapter::{
+    classify_failure, parse_json_line, AgentAdapter, ExecuteRequest, TerminalTracker,
+};
 use devorch_process::ProcessSpec;
 use devorch_protocol::event::{
     CommandCompleted, CommandStarted, Completed, Failed, FileChanged, PlanStep, PlanStepStatus,
@@ -99,17 +101,18 @@ impl AgentAdapter for CodexAdapter {
                     .unwrap_or("turn failed")
                     .to_string();
                 vec![AgentEvent::Failed(Failed {
+                    class: classify_failure(&message),
                     message,
-                    class: FailureClass::ToolFailure,
                 })]
             }
 
             "error" => {
                 self.terminal.mark();
+                let message = str_field(&value, "message")
+                    .unwrap_or_else(|| "codex reported an error".into());
                 vec![AgentEvent::Failed(Failed {
-                    message: str_field(&value, "message")
-                        .unwrap_or_else(|| "codex reported an error".into()),
-                    class: FailureClass::AgentProtocol,
+                    class: classify_failure(&message),
+                    message,
                 })]
             }
 
@@ -251,14 +254,15 @@ impl CodexAdapter {
                 })
                 .unwrap_or_default(),
 
-            "error" => {
-                self.terminal.mark();
-                vec![AgentEvent::Failed(Failed {
-                    message: str_field(item, "message")
-                        .unwrap_or_else(|| "codex item error".into()),
-                    class: FailureClass::ToolFailure,
-                })]
-            }
+            // An item-level error is advisory: a live run emits one for
+            // something as harmless as a shortened skill description and then
+            // carries on. Marking the session terminal here would end a session
+            // that is still working, so only the stream-level `error` and
+            // `turn.failed` events do that.
+            "error" => vec![AgentEvent::Failed(Failed {
+                message: str_field(item, "message").unwrap_or_else(|| "codex item error".into()),
+                class: FailureClass::ToolFailure,
+            })],
 
             _ => Vec::new(),
         }
