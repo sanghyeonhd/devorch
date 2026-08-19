@@ -57,3 +57,7 @@ tmp/
 temp/
 *.tmp
 *.temp
+
+# Rust build output
+/target/
+.DS_Store

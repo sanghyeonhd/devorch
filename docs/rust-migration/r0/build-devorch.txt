@@ -1,0 +1,1 @@
+go build -o /tmp/r0-devorch ./cmd/devorch  80.65s user 17.74s system 596% cpu 16.506 total

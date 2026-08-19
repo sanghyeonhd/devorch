@@ -4782,7 +4782,7 @@ func (c *UnifiedCLI) showHardwareStatus() error {
 	memUsage, err := getMemoryUsage(profile)
 	if err == nil {
 		memGB := float64(profile.MemTotalMB) / 1024
-		memUsedGB := memUsage.UsedMB / 1024
+		memUsedGB := float64(memUsage.UsedMB) / 1024
 		memPercent := float64(memUsage.UsedMB) / float64(profile.MemTotalMB) * 100
 		fmt.Printf("  Memory Usage: %.1fGB/%.1fGB (%.1f%%)\n", memUsedGB, memGB, memPercent)
 	} else {

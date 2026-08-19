@@ -1,0 +1,18 @@
+[package]
+name = "devorch-git"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Git plumbing: worktree lifecycle and complete change inventory."
+
+[dependencies]
+devorch-protocol.workspace = true
+devorch-process.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

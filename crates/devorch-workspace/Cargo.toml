@@ -1,0 +1,19 @@
+[package]
+name = "devorch-workspace"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Workspace manager: git worktrees bound to persisted records."
+
+[dependencies]
+chrono.workspace = true
+devorch-git.workspace = true
+devorch-protocol.workspace = true
+devorch-store.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

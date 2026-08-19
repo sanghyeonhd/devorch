@@ -1,0 +1,27 @@
+/api/providers
+/api/stats
+/api/system/info
+/health
+/oauth/authorize/
+/oauth/callback/
+/oauth/logout/
+/oauth/status/
+/v1/stream
+GET /api/acp/events
+GET /api/acp/ws
+GET /api/health
+GET /api/learning/arms
+GET /api/learning/runs
+GET /api/learning/stats
+GET /api/providers
+GET /api/providers/{name}/models
+GET /api/system/fingerprint
+GET /api/system/info
+GET /api/tasks
+GET /api/tasks/{id}
+GET /api/tools
+GET /health
+POST /api/chat
+POST /api/chat/stream
+POST /api/tasks/{id}/cancel
+POST /api/tools/execute

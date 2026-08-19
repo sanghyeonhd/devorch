@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "wave": "R0",
+  "captured_at": "2026-08-19",
+  "host": {
+    "platform": "darwin",
+    "arch": "amd64",
+    "os_version": "Darwin 24.6.0"
+  },
+  "repository": {
+    "remote": "github.com/sanghyeonhd/devorch",
+    "branch": "main",
+    "baseline_commit": "9ecdc71d93ff54f811564bcbd0332131f859c796"
+  },
+  "toolchains": {
+    "go_declared": "1.24.0",
+    "go_installed": "1.26.5",
+    "cargo": "1.97.1",
+    "rustc": "1.97.1"
+  },
+  "source_inventory": {
+    "go_files": 359,
+    "go_loc": 58685,
+    "go_packages": 97,
+    "test_files": 3,
+    "packages_with_tests": 3,
+    "sql_migrations": 22,
+    "note": "README claims ~248 Go files; actual count at this commit is 359. Test coverage is effectively absent: 3 test files across 97 packages."
+  },
+  "gates": {
+    "go_build_all": "PASS",
+    "go_vet_all": "PASS (after R0 fixes)",
+    "go_test_all": "PASS (3 ok, 0 fail, 94 no-test)",
+    "go_build_cmd_devorch": "PASS",
+    "go_build_cmd_devorchd": "PASS"
+  },
+  "r0_defects_found": [
+    {
+      "id": "R0-D1",
+      "path": "internal/orchestrator/brain.go",
+      "class": "CORRUPT_SOURCE",
+      "detail": "File contained a duplicate 'package orchestrator' line, ~317 blank lines, then the entire remainder of the file collapsed into one line with the original line order reversed. It also imported a non-existent module path 'github.com/devorch/...' while the module is 'devorch'. The package never compiled and nothing in the repository imported it.",
+      "resolution": "Whole internal/orchestrator package quarantined to archive/broken/ (.go.quarantine suffixes). Not recoverable by mechanical repair; content is unrecoverably line-joined."
+    },
+    {
+      "id": "R0-D2",
+      "path": "internal/cli/unified.go:4785",
+      "class": "TYPE_ERROR",
+      "detail": "memUsedGB computed as int64 then printed with %.1f. Blocked 'go test ./internal/cli' because go test runs vet.",
+      "resolution": "Fixed: float64(memUsage.UsedMB) / 1024."
+    },
+    {
+      "id": "R0-D3",
+      "path": "internal/session/manager.go:160,173",
+      "class": "LOCK_COPY",
+      "detail": "saveSession copied Session by value (sessionData := *session) and json-encoded the copy; Session embeds sync.RWMutex. Copying a held lock.",
+      "resolution": "Added lock-free sessionDoc snapshot type and Session.doc(); manager now serializes the snapshot. On-disk JSON shape unchanged."
+    }
+  ],
+  "binaries": {
+    "devorch_bytes": 20141264,
+    "devorchd_bytes": 15985008,
+    "build_time_devorch_seconds": 16.5
+  },
+  "runtime": {
+    "devorch_help_startup_seconds_warm": 0.01,
+    "devorch_help_startup_seconds_cold": 0.48,
+    "devorchd_idle_rss_bytes_at_4s": 14421504,
+    "devorchd_idle_rss_bytes_after_probes": 16490496,
+    "health_latency_seconds": [0.000552, 0.000660, 0.000550],
+    "api_providers_latency_seconds": [0.000657, 0.000596, 0.000594]
+  },
+  "daemon_endpoints_count": 27,
+  "agents": [
+    {
+      "id": "codex",
+      "installed": true,
+      "path": "/Users/deniallee/.local/bin/codex",
+      "version": "codex-cli 0.144.5",
+      "structured_headless": "codex exec --json",
+      "runtime_modes": ["one_shot_structured", "persistent_protocol", "interactive_pty"]
+    },
+    {
+      "id": "claude",
+      "installed": true,
+      "path": "/Users/deniallee/.local/bin/claude",
+      "version": "2.1.228",
+      "structured_headless": "claude -p --output-format stream-json",
+      "runtime_modes": ["one_shot_structured", "interactive_pty"],
+      "extra": ["--resume", "--permission-mode", "--allowed-tools", "--input-format"]
+    },
+    {
+      "id": "grok",
+      "installed": true,
+      "path": "/Users/deniallee/.grok/bin/grok",
+      "version": "grok 1.0.4 (d846eb93d94d) [stable]",
+      "structured_headless": "grok -p --output-format streaming-json",
+      "runtime_modes": ["one_shot_structured", "persistent_protocol", "interactive_pty"],
+      "extra": ["grok agent (stdio)", "--json-schema", "streaming-messages-json", "ACP session updates"]
+    },
+    {
+      "id": "gemini",
+      "installed": true,
+      "path": "/usr/local/bin/gemini",
+      "version": "0.46.0",
+      "structured_headless": "gemini -p --output-format stream-json",
+      "runtime_modes": ["one_shot_structured", "interactive_pty"]
+    }
+  ],
+  "not_validated": [
+    "live agent smoke sessions (R4 / V3)",
+    "Windows and Linux builds",
+    "native OS input control",
+    "browser runtime"
+  ]
+}

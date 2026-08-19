@@ -156,9 +156,7 @@ func (m *Manager) saveSession(session *Session) error {
 	sessionPath := filepath.Join(m.storePath, session.ID+".json")
 
 	// Create a copy for saving (to avoid holding lock during I/O)
-	session.mu.RLock()
-	sessionData := *session
-	session.mu.RUnlock()
+	sessionData := session.doc()
 
 	// Save to temporary file first, then rename (atomic operation)
 	tempPath := sessionPath + ".tmp"

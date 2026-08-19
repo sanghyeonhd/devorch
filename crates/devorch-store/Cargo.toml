@@ -1,0 +1,19 @@
+[package]
+name = "devorch-store"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "SQLite persistence: migrations, workspaces and the event journal."
+
+[dependencies]
+chrono.workspace = true
+devorch-protocol.workspace = true
+rusqlite.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

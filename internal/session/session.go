@@ -320,3 +320,39 @@ func (s *Session) recalculateTokens() {
 	}
 	s.TotalTokens = total
 }
+
+// sessionDoc is the on-disk representation of a Session. It mirrors the JSON
+// fields exactly but carries no mutex, so a session can be snapshotted and
+// serialized without copying its lock.
+type sessionDoc struct {
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	Workspace   string         `json:"workspace"`
+	Messages    []Message      `json:"messages"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	Summary     string         `json:"summary,omitempty"`
+	Tags        []string       `json:"tags,omitempty"`
+	ParentID    string         `json:"parent_id,omitempty"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	TotalTokens int            `json:"total_tokens"`
+}
+
+// doc returns a lock-free snapshot of the session for serialization.
+func (s *Session) doc() sessionDoc {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return sessionDoc{
+		ID:          s.ID,
+		Name:        s.Name,
+		Workspace:   s.Workspace,
+		Messages:    s.Messages,
+		Metadata:    s.Metadata,
+		Summary:     s.Summary,
+		Tags:        s.Tags,
+		ParentID:    s.ParentID,
+		CreatedAt:   s.CreatedAt,
+		UpdatedAt:   s.UpdatedAt,
+		TotalTokens: s.TotalTokens,
+	}
+}

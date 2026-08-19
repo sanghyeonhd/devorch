@@ -1,0 +1,18 @@
+[package]
+name = "devorch-events"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Event sequencing and journalling on top of the store."
+
+[dependencies]
+chrono.workspace = true
+devorch-protocol.workspace = true
+devorch-store.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
