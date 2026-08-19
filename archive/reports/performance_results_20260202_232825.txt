@@ -1,8 +1,0 @@
-=== CLI 응답 시간 테스트 ===
-Memory Usage: 0MB
-Concurrent Sessions: ms
-=== 성능 요약 ===
-총 테스트: 0
-통과: 0
-통과율: %
-테스트 완료: #오후

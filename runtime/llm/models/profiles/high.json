@@ -1,6 +1,0 @@
-{
-  "profile": "high",
-  "targets": [
-    { "runtime": "ollama", "models": ["qwen2.5:14b"] }
-  ]
-}

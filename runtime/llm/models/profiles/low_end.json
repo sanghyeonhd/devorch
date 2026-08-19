@@ -1,6 +1,0 @@
-{
-  "profile": "low_end",
-  "targets": [
-    { "runtime": "ollama", "models": ["llama3.1:8b"] }
-  ]
-}
