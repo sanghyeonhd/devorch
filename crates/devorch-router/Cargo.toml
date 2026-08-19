@@ -1,0 +1,16 @@
+[package]
+name = "devorch-router"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Chooses how many agents to run and which ones."
+
+[dependencies]
+devorch-config.workspace = true
+devorch-protocol.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

@@ -141,9 +141,7 @@ pub async fn verify(
     let mut report = VerificationReport::default();
 
     for check in checks {
-        let mut spec = ProcessSpec::new(&check.program)
-            .args(&check.args)
-            .cwd(dir);
+        let mut spec = ProcessSpec::new(&check.program).args(&check.args).cwd(dir);
         if let Some(timeout) = timeout {
             spec = spec.timeout(timeout);
         }
@@ -213,7 +211,14 @@ pub fn detect_checks(dir: &Path) -> Vec<Check> {
             Check::optional(
                 "lint",
                 "cargo",
-                &["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"],
+                &[
+                    "clippy",
+                    "--workspace",
+                    "--all-targets",
+                    "--",
+                    "-D",
+                    "warnings",
+                ],
             ),
         ];
     }
@@ -260,7 +265,11 @@ mod tests {
     #[tokio::test]
     async fn a_failing_required_check_disqualifies() {
         let dir = tempfile::tempdir().unwrap();
-        let checks = vec![Check::required("tests", "sh", &["-c", "echo boom >&2; exit 1"])];
+        let checks = vec![Check::required(
+            "tests",
+            "sh",
+            &["-c", "echo boom >&2; exit 1"],
+        )];
         let report = verify(dir.path(), &checks, None).await.unwrap();
 
         assert!(!report.passed());

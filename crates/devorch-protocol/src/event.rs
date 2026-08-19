@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::id::{EventId, MissionId, SessionId, TaskId, WorkspaceId};
 
 /// Which agent product produced an event.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentKind {
     Codex,

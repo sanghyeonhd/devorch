@@ -1,0 +1,33 @@
+[package]
+name = "devorch-mission"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Mission execution: candidates, evaluation, winner merge."
+
+[dependencies]
+async-trait.workspace = true
+chrono.workspace = true
+devorch-agent.workspace = true
+devorch-agents.workspace = true
+devorch-config.workspace = true
+devorch-evaluate.workspace = true
+devorch-events.workspace = true
+devorch-git.workspace = true
+devorch-process.workspace = true
+devorch-protocol.workspace = true
+devorch-router.workspace = true
+devorch-store.workspace = true
+devorch-verify.workspace = true
+devorch-workspace.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

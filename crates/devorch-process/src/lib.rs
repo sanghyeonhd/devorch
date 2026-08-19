@@ -399,7 +399,11 @@ mod tests {
         let out = run_streaming(&spec, |_| {}).await.expect("run");
 
         assert!(out.success());
-        assert!(out.stderr.len() > 100_000, "stderr len {}", out.stderr.len());
+        assert!(
+            out.stderr.len() > 100_000,
+            "stderr len {}",
+            out.stderr.len()
+        );
     }
 
     #[tokio::test]

@@ -45,7 +45,13 @@ pub enum StoreError {
 }
 
 /// Embedded migrations, applied in order and recorded in `schema_migrations`.
-const MIGRATIONS: &[(&str, &str)] = &[("0001_init", include_str!("../migrations/0001_init.sql"))];
+const MIGRATIONS: &[(&str, &str)] = &[
+    ("0001_init", include_str!("../migrations/0001_init.sql")),
+    (
+        "0002_documents",
+        include_str!("../migrations/0002_documents.sql"),
+    ),
+];
 
 /// An open Devorch database.
 pub struct Store {
@@ -132,6 +138,74 @@ impl Store {
     pub fn journal(&self) -> EventJournal<'_> {
         EventJournal::new(&self.conn)
     }
+
+    /// Insert or replace a JSON document of `kind`.
+    ///
+    /// `created_at` is preserved across updates so a record's age survives being
+    /// rewritten as a mission progresses.
+    pub fn put_document<T: serde::Serialize>(
+        &self,
+        kind: &str,
+        id: &str,
+        value: &T,
+    ) -> Result<(), StoreError> {
+        let payload = serde_json::to_string(value)?;
+        let now = chrono::Utc::now().to_rfc3339();
+        self.conn.execute(
+            "INSERT INTO documents (kind, id, payload, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?4)
+             ON CONFLICT (kind, id) DO UPDATE SET payload = ?3, updated_at = ?4",
+            rusqlite::params![kind, id, payload, now],
+        )?;
+        Ok(())
+    }
+
+    /// Read one document, or `None` if it is absent.
+    pub fn get_document<T: serde::de::DeserializeOwned>(
+        &self,
+        kind: &str,
+        id: &str,
+    ) -> Result<Option<T>, StoreError> {
+        use rusqlite::OptionalExtension;
+        let payload: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT payload FROM documents WHERE kind = ?1 AND id = ?2",
+                [kind, id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        match payload {
+            Some(payload) => Ok(Some(serde_json::from_str(&payload)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Every document of `kind`, newest first.
+    pub fn list_documents<T: serde::de::DeserializeOwned>(
+        &self,
+        kind: &str,
+    ) -> Result<Vec<T>, StoreError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT payload FROM documents WHERE kind = ?1 ORDER BY created_at DESC")?;
+        let rows = stmt.query_map([kind], |row| row.get::<_, String>(0))?;
+
+        let mut out = Vec::new();
+        for payload in rows {
+            out.push(serde_json::from_str(&payload?)?);
+        }
+        Ok(out)
+    }
+
+    /// Delete one document, reporting whether it existed.
+    pub fn delete_document(&self, kind: &str, id: &str) -> Result<bool, StoreError> {
+        let removed = self.conn.execute(
+            "DELETE FROM documents WHERE kind = ?1 AND id = ?2",
+            [kind, id],
+        )?;
+        Ok(removed > 0)
+    }
 }
 
 #[cfg(test)]
@@ -144,12 +218,89 @@ mod tests {
         let path = dir.path().join("devorch3.db");
 
         let store = Store::open(&path).unwrap();
-        assert_eq!(store.applied_migrations().unwrap(), vec!["0001_init"]);
+        assert_eq!(
+            store.applied_migrations().unwrap(),
+            vec!["0001_init", "0002_documents"]
+        );
         drop(store);
 
         // Reopening must not re-run migrations or fail.
         let store = Store::open(&path).unwrap();
-        assert_eq!(store.applied_migrations().unwrap(), vec!["0001_init"]);
+        assert_eq!(
+            store.applied_migrations().unwrap(),
+            vec!["0001_init", "0002_documents"]
+        );
+    }
+
+    #[test]
+    fn documents_round_trip_and_update_in_place() {
+        #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+        struct Doc {
+            goal: String,
+            status: String,
+        }
+
+        let store = Store::open_in_memory().unwrap();
+        let first = Doc {
+            goal: "fix login".into(),
+            status: "running".into(),
+        };
+        store.put_document("mission", "m1", &first).unwrap();
+        assert_eq!(
+            store.get_document::<Doc>("mission", "m1").unwrap(),
+            Some(first)
+        );
+
+        let updated = Doc {
+            goal: "fix login".into(),
+            status: "succeeded".into(),
+        };
+        store.put_document("mission", "m1", &updated).unwrap();
+
+        let all = store.list_documents::<Doc>("mission").unwrap();
+        assert_eq!(all.len(), 1, "an update must not create a second row");
+        assert_eq!(all[0].status, "succeeded");
+    }
+
+    #[test]
+    fn document_kinds_are_isolated_from_each_other() {
+        let store = Store::open_in_memory().unwrap();
+        store.put_document("mission", "x", &"a").unwrap();
+        store.put_document("plan", "x", &"b").unwrap();
+
+        assert_eq!(
+            store.get_document::<String>("mission", "x").unwrap(),
+            Some("a".to_string())
+        );
+        assert_eq!(store.list_documents::<String>("plan").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_missing_document_is_none_and_deleting_it_says_so() {
+        let store = Store::open_in_memory().unwrap();
+        assert_eq!(
+            store.get_document::<String>("mission", "nope").unwrap(),
+            None
+        );
+        assert!(!store.delete_document("mission", "nope").unwrap());
+
+        store.put_document("mission", "x", &"a").unwrap();
+        assert!(store.delete_document("mission", "x").unwrap());
+    }
+
+    #[test]
+    fn documents_survive_reopening_the_database() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("devorch3.db");
+        {
+            let store = Store::open(&path).unwrap();
+            store.put_document("mission", "m1", &"persisted").unwrap();
+        }
+        let store = Store::open(&path).unwrap();
+        assert_eq!(
+            store.get_document::<String>("mission", "m1").unwrap(),
+            Some("persisted".to_string())
+        );
     }
 
     #[test]

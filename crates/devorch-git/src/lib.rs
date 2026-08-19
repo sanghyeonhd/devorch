@@ -133,6 +133,169 @@ impl Repository {
         git(&self.root, ["worktree", "prune"]).await?;
         Ok(())
     }
+
+    /// Stage everything in `dir` and commit it on that worktree's branch.
+    ///
+    /// A candidate's work has to become a commit before it can be merged, and
+    /// `git add -A` is what makes untracked files part of it — the same reason
+    /// the inventory has to look at them.
+    pub async fn commit_all(&self, dir: &Path, message: &str) -> Result<String, GitError> {
+        git(dir, ["add", "-A"]).await?;
+        git(
+            dir,
+            [
+                "-c",
+                "user.name=Devorch",
+                "-c",
+                "user.email=devorch@localhost",
+                "commit",
+                "--no-verify",
+                "-m",
+                message,
+            ],
+        )
+        .await?;
+        Ok(git(dir, ["rev-parse", "HEAD"]).await?.trim().to_string())
+    }
+
+    /// Add a worktree at `path` on a detached HEAD at `rev`.
+    ///
+    /// Used for scratch checkouts — verifying a merge, running a gate — where
+    /// no branch should be created or moved.
+    pub async fn worktree_add_detached(&self, path: &Path, rev: &str) -> Result<(), GitError> {
+        git(
+            &self.root,
+            ["worktree", "add", "--detach", &path.to_string_lossy(), rev],
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Create `branch` at `base` without checking it out.
+    pub async fn branch_create(&self, branch: &str, base: &str) -> Result<(), GitError> {
+        git(&self.root, ["branch", "-f", branch, base]).await?;
+        Ok(())
+    }
+
+    /// Whether `branch` exists.
+    pub async fn branch_exists(&self, branch: &str) -> Result<bool, GitError> {
+        let refname = format!("refs/heads/{branch}");
+        Ok(
+            git(&self.root, ["show-ref", "--verify", "--quiet", &refname])
+                .await
+                .is_ok(),
+        )
+    }
+
+    /// Merge `source` into `target`, leaving `target` checked out where it was.
+    ///
+    /// The merge runs in a temporary worktree rather than the user's checkout,
+    /// so a conflict cannot leave the working directory the operator is looking
+    /// at in a half-merged state.
+    pub async fn merge_into(
+        &self,
+        target: &str,
+        source: &str,
+        message: &str,
+    ) -> Result<MergeOutcome, GitError> {
+        let scratch = self
+            .root
+            .join(".git")
+            .join("devorch-merge")
+            .join(format!("{}", std::process::id()));
+
+        if scratch.exists() {
+            let _ = self.worktree_remove(&scratch, true).await;
+        }
+        if let Some(parent) = scratch.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+
+        git(
+            &self.root,
+            [
+                "worktree",
+                "add",
+                "--detach",
+                &scratch.to_string_lossy(),
+                target,
+            ],
+        )
+        .await?;
+
+        let result = git(
+            &scratch,
+            [
+                "-c",
+                "user.name=Devorch",
+                "-c",
+                "user.email=devorch@localhost",
+                "merge",
+                "--no-ff",
+                "-m",
+                message,
+                source,
+            ],
+        )
+        .await;
+
+        let outcome = match result {
+            Ok(_) => {
+                let merged = git(&scratch, ["rev-parse", "HEAD"])
+                    .await?
+                    .trim()
+                    .to_string();
+                // The merge happened on a detached HEAD; move the branch to it.
+                git(&self.root, ["branch", "-f", target, &merged]).await?;
+                MergeOutcome::Merged { commit: merged }
+            }
+            Err(GitError::Command { stderr, .. }) => {
+                let conflicts = git(&scratch, ["diff", "--name-only", "--diff-filter=U"])
+                    .await
+                    .unwrap_or_default()
+                    .lines()
+                    .map(|l| PathBuf::from(l.trim()))
+                    .filter(|p| !p.as_os_str().is_empty())
+                    .collect();
+                let _ = git(&scratch, ["merge", "--abort"]).await;
+                MergeOutcome::Conflict { conflicts, stderr }
+            }
+            Err(other) => {
+                let _ = self.worktree_remove(&scratch, true).await;
+                return Err(other);
+            }
+        };
+
+        self.worktree_remove(&scratch, true).await?;
+        Ok(outcome)
+    }
+}
+
+/// What happened when a candidate was merged.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MergeOutcome {
+    /// The merge landed, producing this commit.
+    Merged { commit: String },
+    /// The merge conflicted and was aborted; nothing was changed.
+    Conflict {
+        conflicts: Vec<PathBuf>,
+        stderr: String,
+    },
+}
+
+impl MergeOutcome {
+    /// Whether the merge landed.
+    pub fn is_merged(&self) -> bool {
+        matches!(self, MergeOutcome::Merged { .. })
+    }
+
+    /// The resulting commit, if the merge landed.
+    pub fn commit(&self) -> Option<&str> {
+        match self {
+            MergeOutcome::Merged { commit } => Some(commit),
+            MergeOutcome::Conflict { .. } => None,
+        }
+    }
 }
 
 /// Collect the complete change inventory of the worktree at `dir`.

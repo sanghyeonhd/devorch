@@ -10,7 +10,6 @@
 
 use std::path::PathBuf;
 
-use devorch_agent::adapter::AgentAdapter;
 use devorch_agents::adapter_for;
 use devorch_protocol::{AgentEvent, AgentKind};
 
@@ -20,8 +19,8 @@ fn fixture(agent: AgentKind, name: &str) -> Vec<String> {
         .join("../../testdata/agents")
         .join(agent.as_str())
         .join(format!("{name}.jsonl"));
-    let text = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let text =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     text.lines().map(str::to_string).collect()
 }
 
@@ -70,7 +69,10 @@ fn every_adapter_reports_the_edit_and_the_command_it_ran() {
                     | AgentEvent::CommandStarted(_)
             )
         });
-        assert!(touched, "{agent}: no tool, command or file activity reported");
+        assert!(
+            touched,
+            "{agent}: no tool, command or file activity reported"
+        );
 
         let finished_work = events.iter().any(|e| {
             matches!(
@@ -86,9 +88,9 @@ fn every_adapter_reports_the_edit_and_the_command_it_ran() {
 fn every_adapter_produces_assistant_text() {
     for agent in AgentKind::ALL {
         let events = replay(agent, "session", Some(0));
-        let has_answer = events.iter().any(
-            |e| matches!(e, AgentEvent::TextDelta(t) if !t.reasoning && !t.text.is_empty()),
-        );
+        let has_answer = events
+            .iter()
+            .any(|e| matches!(e, AgentEvent::TextDelta(t) if !t.reasoning && !t.text.is_empty()));
         assert!(has_answer, "{agent}: no assistant text was normalized");
     }
 }

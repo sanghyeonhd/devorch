@@ -11,13 +11,11 @@
 use devorch_agent::adapter::{parse_json_line, AgentAdapter, ExecuteRequest, TerminalTracker};
 use devorch_process::ProcessSpec;
 use devorch_protocol::event::{
-    Completed, CommandCompleted, CommandStarted, Failed, FileChanged, PlanStep, PlanStepStatus,
+    CommandCompleted, CommandStarted, Completed, Failed, FileChanged, PlanStep, PlanStepStatus,
     PlanUpdated, SessionStarted, TextDelta, ToolCompleted, ToolStarted, TurnCompleted, TurnStarted,
     Usage,
 };
-use devorch_protocol::{
-    AgentEvent, AgentKind, AgentRuntimeMode, FailureClass, FileChangeKind,
-};
+use devorch_protocol::{AgentEvent, AgentKind, AgentRuntimeMode, FailureClass, FileChangeKind};
 use serde_json::Value;
 
 /// Normalizes the `codex exec --json` stream.
@@ -85,9 +83,7 @@ impl AgentAdapter for CodexAdapter {
             }
 
             "turn.completed" => {
-                let mut events = vec![AgentEvent::TurnCompleted(TurnCompleted {
-                    turn: self.turn,
-                })];
+                let mut events = vec![AgentEvent::TurnCompleted(TurnCompleted { turn: self.turn })];
                 if let Some(usage) = value.get("usage") {
                     events.push(usage_event(usage));
                 }

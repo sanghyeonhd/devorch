@@ -11,6 +11,7 @@ description = "SQLite persistence: migrations, workspaces and the event journal.
 chrono.workspace = true
 devorch-protocol.workspace = true
 rusqlite.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

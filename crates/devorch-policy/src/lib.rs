@@ -439,7 +439,10 @@ mod tests {
         );
         assert_eq!(
             policy
-                .evaluate(&ActionRequest::new(Capability::CredentialAccess, "keychain"))
+                .evaluate(&ActionRequest::new(
+                    Capability::CredentialAccess,
+                    "keychain"
+                ))
                 .decision,
             Decision::AskStrong
         );
@@ -463,7 +466,11 @@ mod tests {
         policy.rules.clear();
 
         let verdict = policy.evaluate(&ActionRequest::new(Capability::GitPush, "origin"));
-        assert_eq!(verdict.decision, Decision::Deny, "gaps must deny, not allow");
+        assert_eq!(
+            verdict.decision,
+            Decision::Deny,
+            "gaps must deny, not allow"
+        );
     }
 
     #[test]

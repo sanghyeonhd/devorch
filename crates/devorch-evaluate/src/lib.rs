@@ -41,7 +41,10 @@ pub struct Candidate {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Disqualification {
     /// A required verification check failed.
-    VerificationFailed { check: String, exit_code: Option<i32> },
+    VerificationFailed {
+        check: String,
+        exit_code: Option<i32>,
+    },
     /// The candidate was never verified at all.
     NotVerified,
     /// The candidate changed nothing.
@@ -71,7 +74,10 @@ impl Disqualification {
                     format!("touched a path the ticket does not own: {}", path.display())
                 }
                 InventoryViolation::PossibleSecret { path } => {
-                    format!("added something that looks like a credential: {}", path.display())
+                    format!(
+                        "added something that looks like a credential: {}",
+                        path.display()
+                    )
                 }
             },
         }
@@ -325,7 +331,10 @@ mod tests {
         );
 
         let comparison = compare(vec![wide, lean], &[]);
-        assert_eq!(comparison.winner().unwrap().candidate.agent, AgentKind::Codex);
+        assert_eq!(
+            comparison.winner().unwrap().candidate.agent,
+            AgentKind::Codex
+        );
     }
 
     #[test]
@@ -339,7 +348,10 @@ mod tests {
         large_but_correct.duration_ms = 90_000;
 
         let comparison = compare(vec![tiny_but_broken, large_but_correct], &[]);
-        assert_eq!(comparison.winner().unwrap().candidate.agent, AgentKind::Codex);
+        assert_eq!(
+            comparison.winner().unwrap().candidate.agent,
+            AgentKind::Codex
+        );
     }
 
     #[test]
@@ -352,7 +364,10 @@ mod tests {
         honest.agent_claimed_success = false;
 
         let comparison = compare(vec![liar, honest], &[]);
-        assert_eq!(comparison.winner().unwrap().candidate.agent, AgentKind::Codex);
+        assert_eq!(
+            comparison.winner().unwrap().candidate.agent,
+            AgentKind::Codex
+        );
         assert!(comparison.rejected()[0].candidate.agent_claimed_success);
     }
 
@@ -369,7 +384,11 @@ mod tests {
 
     #[test]
     fn a_candidate_that_changed_nothing_cannot_win() {
-        let idle = candidate(AgentKind::Codex, ChangeInventory::default(), passing_checks());
+        let idle = candidate(
+            AgentKind::Codex,
+            ChangeInventory::default(),
+            passing_checks(),
+        );
         let evaluation = evaluate(idle, &[]);
 
         assert!(!evaluation.passed());
@@ -450,7 +469,10 @@ mod tests {
         });
 
         let comparison = compare(vec![lint_failing, clean], &[]);
-        assert_eq!(comparison.winner().unwrap().candidate.agent, AgentKind::Codex);
+        assert_eq!(
+            comparison.winner().unwrap().candidate.agent,
+            AgentKind::Codex
+        );
     }
 
     #[test]
@@ -475,7 +497,10 @@ mod tests {
 
         let comparison = compare(vec![a, b], &[]);
         // Alphabetical by agent name: claude before gemini.
-        assert_eq!(comparison.winner().unwrap().candidate.agent, AgentKind::Claude);
+        assert_eq!(
+            comparison.winner().unwrap().candidate.agent,
+            AgentKind::Claude
+        );
     }
 
     #[test]

@@ -17,6 +17,8 @@ members = [
     "crates/devorch-verify",
     "crates/devorch-policy",
     "crates/devorch-evaluate",
+    "crates/devorch-router",
+    "crates/devorch-mission",
     "bins/devorch",
     "xtask",
 ]
@@ -50,6 +52,7 @@ devorch-router = { path = "crates/devorch-router" }
 devorch-ui = { path = "crates/devorch-ui" }
 
 anyhow = "1"
+async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 eframe = { version = "0.29", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
