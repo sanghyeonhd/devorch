@@ -1,0 +1,4 @@
+# Keep text files as LF so Windows checkouts match what `cargo xtask`
+# generate-and-compare produces. `core.autocrlf` otherwise turns the
+# generated vendor rule files into CRLF and fails verify-agent-rules.
+* text=auto eol=lf
