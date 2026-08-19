@@ -228,6 +228,64 @@ dependencies = [
 ]
 
 [[package]]
+name = "devorch-agent-claude"
+version = "3.0.0-alpha.1"
+dependencies = [
+ "devorch-agent",
+ "devorch-process",
+ "devorch-protocol",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "devorch-agent-codex"
+version = "3.0.0-alpha.1"
+dependencies = [
+ "devorch-agent",
+ "devorch-process",
+ "devorch-protocol",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "devorch-agent-gemini"
+version = "3.0.0-alpha.1"
+dependencies = [
+ "devorch-agent",
+ "devorch-process",
+ "devorch-protocol",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "devorch-agent-grok"
+version = "3.0.0-alpha.1"
+dependencies = [
+ "devorch-agent",
+ "devorch-process",
+ "devorch-protocol",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "devorch-agents"
+version = "3.0.0-alpha.1"
+dependencies = [
+ "devorch-agent",
+ "devorch-agent-claude",
+ "devorch-agent-codex",
+ "devorch-agent-gemini",
+ "devorch-agent-grok",
+ "devorch-protocol",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "devorch-config"
 version = "3.0.0-alpha.1"
 dependencies = [
@@ -236,6 +294,16 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml",
+]
+
+[[package]]
+name = "devorch-evaluate"
+version = "3.0.0-alpha.1"
+dependencies = [
+ "devorch-protocol",
+ "devorch-verify",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -260,6 +328,15 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "devorch-policy"
+version = "3.0.0-alpha.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -292,6 +369,19 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "devorch-verify"
+version = "3.0.0-alpha.1"
+dependencies = [
+ "devorch-process",
+ "devorch-protocol",
+ "serde",
+ "tempfile",
+ "thiserror",
+ "tokio",
  "tracing",
 ]
 

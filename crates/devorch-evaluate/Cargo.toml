@@ -1,0 +1,16 @@
+[package]
+name = "devorch-evaluate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Deterministic candidate evaluation and winner selection."
+
+[dependencies]
+devorch-protocol.workspace = true
+devorch-verify.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

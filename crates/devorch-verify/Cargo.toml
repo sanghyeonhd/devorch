@@ -1,16 +1,19 @@
 [package]
-name = "devorch-process"
+name = "devorch-verify"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Cross-platform process execution for Devorch."
+description = "Deterministic verification of agent work."
 
 [dependencies]
+devorch-process.workspace = true
+devorch-protocol.workspace = true
+serde.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["io-util", "macros", "process", "rt-multi-thread", "time", "sync"] }
 tracing.workspace = true
 
 [dev-dependencies]
+tempfile.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

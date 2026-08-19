@@ -1,0 +1,3 @@
+{"type":"init","session_id":"gem-0002","model":"gemini-2.5-pro"}
+{"type":"message","role":"assistant","content":"Working on it."}
+{"type":"error","message":"Quota exceeded for the current project"}

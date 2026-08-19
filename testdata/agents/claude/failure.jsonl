@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"7c2f1a80-0000-4000-8000-000000000002","model":"claude-opus-5"}
+{"type":"assistant","session_id":"7c2f1a80-0000-4000-8000-000000000002","message":{"id":"msg_01","role":"assistant","content":[{"type":"tool_use","id":"toolu_09","name":"Bash","input":{"command":"cargo test"}}]}}
+{"type":"user","session_id":"7c2f1a80-0000-4000-8000-000000000002","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_09","content":"error: linker not found","is_error":true}]}}
+{"type":"result","subtype":"error_max_turns","is_error":true,"session_id":"7c2f1a80-0000-4000-8000-000000000002","result":"Reached the maximum number of turns."}

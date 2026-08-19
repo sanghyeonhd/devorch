@@ -12,9 +12,13 @@ use devorch_process::{run, ProcessError, ProcessSpec};
 use devorch_protocol::{AgentKind, AgentRuntimeMode};
 use serde::{Deserialize, Serialize};
 
+pub mod adapter;
 pub mod inspect;
+pub mod runner;
 
+pub use adapter::{AgentAdapter, ExecuteRequest, TerminalTracker};
 pub use inspect::{inspect, inspect_all};
+pub use runner::{run_agent, AgentRun};
 
 /// Failure modes of agent inspection and execution.
 #[derive(Debug, thiserror::Error)]

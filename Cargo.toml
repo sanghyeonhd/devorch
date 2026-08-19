@@ -9,6 +9,14 @@ members = [
     "crates/devorch-git",
     "crates/devorch-workspace",
     "crates/devorch-agent",
+    "crates/devorch-agent-codex",
+    "crates/devorch-agent-claude",
+    "crates/devorch-agent-grok",
+    "crates/devorch-agent-gemini",
+    "crates/devorch-agents",
+    "crates/devorch-verify",
+    "crates/devorch-policy",
+    "crates/devorch-evaluate",
     "bins/devorch",
     "xtask",
 ]
@@ -29,10 +37,24 @@ devorch-process = { path = "crates/devorch-process" }
 devorch-git = { path = "crates/devorch-git" }
 devorch-workspace = { path = "crates/devorch-workspace" }
 devorch-agent = { path = "crates/devorch-agent" }
+devorch-agent-codex = { path = "crates/devorch-agent-codex" }
+devorch-agent-claude = { path = "crates/devorch-agent-claude" }
+devorch-agent-grok = { path = "crates/devorch-agent-grok" }
+devorch-agent-gemini = { path = "crates/devorch-agent-gemini" }
+devorch-agents = { path = "crates/devorch-agents" }
+devorch-mission = { path = "crates/devorch-mission" }
+devorch-verify = { path = "crates/devorch-verify" }
+devorch-policy = { path = "crates/devorch-policy" }
+devorch-evaluate = { path = "crates/devorch-evaluate" }
+devorch-router = { path = "crates/devorch-router" }
+devorch-ui = { path = "crates/devorch-ui" }
 
 anyhow = "1"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
+eframe = { version = "0.29", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
+egui = "0.29"
+egui_extras = "0.29"
 rusqlite = { version = "0.32", features = ["bundled", "chrono"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -139,10 +139,81 @@ impl ProcessOutput {
     }
 }
 
-/// Run `spec` to completion, capturing stdout and stderr.
-pub async fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
-    let started = std::time::Instant::now();
+/// Run `spec`, delivering each stdout line to `on_line` as it arrives.
+///
+/// Structured agent output is newline-delimited JSON, and a mission can run for
+/// minutes: waiting for the process to exit before parsing anything would make
+/// the UI blind for the whole run. `on_line` is synchronous so a caller can
+/// journal each event as it appears.
+///
+/// stderr is drained concurrently — a child that fills the stderr pipe while
+/// nobody reads it deadlocks.
+pub async fn run_streaming<F>(
+    spec: &ProcessSpec,
+    mut on_line: F,
+) -> Result<ProcessOutput, ProcessError>
+where
+    F: FnMut(&str),
+{
+    use tokio::io::{AsyncBufReadExt, BufReader};
 
+    let started = std::time::Instant::now();
+    let mut child = spawn(spec)?;
+
+    let stdout = child.stdout.take().expect("stdout was piped");
+    let stderr = child.stderr.take().expect("stderr was piped");
+
+    let stderr_task = tokio::spawn(async move {
+        let mut reader = BufReader::new(stderr);
+        let mut buf = String::new();
+        let _ = tokio::io::AsyncReadExt::read_to_string(&mut reader, &mut buf).await;
+        buf
+    });
+
+    let mut lines = BufReader::new(stdout).lines();
+    let mut collected = String::new();
+
+    let read_all = async {
+        while let Some(line) = lines.next_line().await? {
+            on_line(&line);
+            collected.push_str(&line);
+            collected.push('\n');
+        }
+        Ok::<(), std::io::Error>(())
+    };
+
+    match spec.timeout {
+        Some(timeout) => match tokio::time::timeout(timeout, read_all).await {
+            Ok(result) => result,
+            Err(_) => {
+                return Err(ProcessError::Timeout {
+                    program: spec.program.clone(),
+                    timeout,
+                })
+            }
+        },
+        None => read_all.await,
+    }
+    .map_err(|source| ProcessError::Io {
+        program: spec.program.clone(),
+        source,
+    })?;
+
+    let status = child.wait().await.map_err(|source| ProcessError::Io {
+        program: spec.program.clone(),
+        source,
+    })?;
+
+    Ok(ProcessOutput {
+        exit_code: status.code(),
+        stdout: collected,
+        stderr: stderr_task.await.unwrap_or_default(),
+        duration: started.elapsed(),
+    })
+}
+
+/// Build and spawn the child described by `spec`.
+fn spawn(spec: &ProcessSpec) -> Result<tokio::process::Child, ProcessError> {
     let mut cmd = Command::new(&spec.program);
     cmd.args(&spec.args)
         .stdin(Stdio::null())
@@ -160,7 +231,7 @@ pub async fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
         }
     }
 
-    let child = cmd.spawn().map_err(|source| {
+    cmd.spawn().map_err(|source| {
         if source.kind() == std::io::ErrorKind::NotFound {
             ProcessError::NotFound {
                 program: spec.program.clone(),
@@ -171,7 +242,13 @@ pub async fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
                 source,
             }
         }
-    })?;
+    })
+}
+
+/// Run `spec` to completion, capturing stdout and stderr.
+pub async fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
+    let started = std::time::Instant::now();
+    let child = spawn(spec)?;
 
     let output = match spec.timeout {
         Some(timeout) => match tokio::time::timeout(timeout, child.wait_with_output()).await {
@@ -282,6 +359,59 @@ mod tests {
     async fn which_finds_a_known_binary_and_misses_an_unknown_one() {
         assert!(which("sh").await.is_some());
         assert!(which("devorch-no-such-binary-xyz").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn streaming_delivers_lines_as_they_arrive() {
+        let mut seen = Vec::new();
+        let spec = ProcessSpec::new("sh")
+            .arg("-c")
+            .arg("printf 'one\ntwo\nthree\n'");
+        let out = run_streaming(&spec, |line| seen.push(line.to_string()))
+            .await
+            .expect("run");
+
+        assert!(out.success());
+        assert_eq!(seen, vec!["one", "two", "three"]);
+        assert_eq!(out.stdout, "one\ntwo\nthree\n");
+    }
+
+    #[tokio::test]
+    async fn streaming_captures_stderr_and_the_exit_code() {
+        let spec = ProcessSpec::new("sh")
+            .arg("-c")
+            .arg("echo out; echo problem >&2; exit 4");
+        let out = run_streaming(&spec, |_| {}).await.expect("run");
+
+        assert_eq!(out.exit_code, Some(4));
+        assert!(!out.success());
+        assert!(out.stderr.contains("problem"), "stderr: {:?}", out.stderr);
+    }
+
+    #[tokio::test]
+    async fn streaming_does_not_deadlock_on_a_large_stderr_burst() {
+        // A child that fills the stderr pipe while nobody drains it hangs
+        // forever. 200 KiB comfortably exceeds a pipe buffer.
+        let spec = ProcessSpec::new("sh")
+            .arg("-c")
+            .arg("yes deadlockcheck | head -c 200000 >&2; echo done")
+            .timeout(Duration::from_secs(20));
+        let out = run_streaming(&spec, |_| {}).await.expect("run");
+
+        assert!(out.success());
+        assert!(out.stderr.len() > 100_000, "stderr len {}", out.stderr.len());
+    }
+
+    #[tokio::test]
+    async fn streaming_times_out_on_a_hanging_child() {
+        let spec = ProcessSpec::new("sh")
+            .arg("-c")
+            .arg("sleep 30")
+            .timeout(Duration::from_millis(200));
+        let err = run_streaming(&spec, |_| {})
+            .await
+            .expect_err("should time out");
+        assert!(matches!(err, ProcessError::Timeout { .. }));
     }
 
     #[test]
