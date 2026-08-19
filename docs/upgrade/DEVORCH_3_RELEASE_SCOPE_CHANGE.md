@@ -2,7 +2,7 @@
 
 **작성일:** 2026-08-19
 **선행 문서:** `DEVORCH_3_RUST_MULTI_AGENT_ADE_IMPLEMENTATION.md`, `DEVORCH_3_RUST_AGENT_OPERATING_LAYER_IMPLEMENTATION.md`, `DEVORCH_3_DEVELOPMENT_SIMULATION_VALIDATION.md`
-**후속 문서:** `DEVORCH_3_RELEASE.md` — 이 범위가 실제로 착지한 위치.
+**후속 문서:** `DEVORCH_3_RELEASE.md` — 이 범위가 실제로 착지한 위치. `DEVORCH_3_CHAT_GUI_AND_REUSE.md` — 채팅 우선 GUI와 재사용으로 제품을 끝내는 방법.
 **상태:** 이 문서가 위 세 문서의 **웨이브 순서와 속도**를 대체한다. 기술적 판단(무엇을 어떻게 만들 것인가)은 그대로 유지한다.
 
 ---
