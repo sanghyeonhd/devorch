@@ -186,7 +186,9 @@ Stated plainly rather than left to discovery:
 Devorch was a Go project through v0.1.0. The full Go tree is preserved at the
 tag `devorch-go-final`. The migration, its measurements and the two development
 simulations that shaped it are documented in `docs/rust-migration/` and
-`docs/upgrade/`.
+`docs/upgrade/`. What actually shipped in 3.0.0-alpha.1 — adapters, the mission
+loop, the GUI, Go retirement, and the live defects that changed the adapters —
+is in `docs/upgrade/DEVORCH_3_RELEASE.md`.
 
 ## License
 

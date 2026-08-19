@@ -111,8 +111,8 @@ fn bundle_macos() -> Result<()> {
 fn sync(check: bool) -> Result<()> {
     let root = repo_root()?;
     let source_path = root.join(SOURCE);
-    let source = std::fs::read_to_string(&source_path)
-        .with_context(|| format!("read {}", source_path.display()))?;
+    let source =
+        read_lf(&source_path).with_context(|| format!("read {}", source_path.display()))?;
 
     let mut stale = Vec::new();
     for (file, audience) in TARGETS {
@@ -120,7 +120,7 @@ fn sync(check: bool) -> Result<()> {
         let wanted = render(&source, file, audience);
 
         if check {
-            let current = std::fs::read_to_string(&path).unwrap_or_default();
+            let current = read_lf(&path).unwrap_or_default();
             if current != wanted {
                 stale.push(*file);
             }
@@ -147,6 +147,18 @@ fn render(source: &str, file: &str, audience: &str) -> String {
     format!(
         "<!-- GENERATED FILE — DO NOT EDIT.\n     Source: {SOURCE}\n     Regenerate: cargo xtask sync-agent-rules\n     Read by: {audience} -->\n\n# Devorch agent rules ({file})\n\n{source}"
     )
+}
+
+/// Read a text file as LF. Windows checkouts with `core.autocrlf` turn the
+/// vendor files into CRLF, while `render` always emits LF — byte equality then
+/// fails even when the content is the same.
+fn read_lf(path: &Path) -> Result<String> {
+    let raw = std::fs::read_to_string(path)?;
+    Ok(normalize_lf(&raw))
+}
+
+fn normalize_lf(text: &str) -> String {
+    text.replace("\r\n", "\n").replace('\r', "\n")
 }
 
 /// Walk up from the current directory to the directory holding the source doc.
@@ -269,4 +281,18 @@ fn third_party_notices() -> Result<()> {
     std::fs::write(&path, out).with_context(|| format!("write {}", path.display()))?;
     println!("wrote {} ({} crates)", path.display(), crates.len());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn crlf_checkouts_compare_equal_to_lf_renders() {
+        let source = "rule one\nrule two\n";
+        let wanted = render(source, "AGENTS.md", "Codex and Grok");
+        let crlf = wanted.replace('\n', "\r\n");
+        assert_ne!(crlf, wanted, "CRLF and LF are not byte-equal");
+        assert_eq!(normalize_lf(&crlf), wanted);
+    }
 }

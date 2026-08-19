@@ -25,7 +25,7 @@ pub enum ConfigError {
     Parse {
         path: PathBuf,
         #[source]
-        source: toml::de::Error,
+        source: Box<toml::de::Error>,
     },
 
     #[error("could not determine the home directory")]
@@ -136,7 +136,7 @@ impl Config {
 
         let config: Config = toml::from_str(&text).map_err(|source| ConfigError::Parse {
             path: path.to_path_buf(),
-            source,
+            source: Box::new(source),
         })?;
         config.validate()?;
         Ok(config)
@@ -225,6 +225,11 @@ impl Config {
     }
 }
 
+// clippy::result_large_err fires at 128 bytes. On Windows, `toml::de::Error`
+// plus a PathBuf lands on or over that threshold; boxing the parser error
+// keeps the enum small on every target CI builds.
+const _: () = assert!(std::mem::size_of::<ConfigError>() < 128);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -242,6 +247,18 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let config = Config::load(dir.path().join("absent.toml")).unwrap();
         assert_eq!(config, Config::default());
+    }
+
+    #[test]
+    fn config_error_fits_clippy_result_large_err_on_every_target() {
+        // Windows CI failed here: toml::de::Error + PathBuf is >= 128 bytes
+        // unboxed. The const assertion above is the real pin; this test makes
+        // the size visible in the suite.
+        let size = std::mem::size_of::<ConfigError>();
+        assert!(
+            size < 128,
+            "ConfigError is {size} bytes; clippy::result_large_err fires at 128"
+        );
     }
 
     #[test]
