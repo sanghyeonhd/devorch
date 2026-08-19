@@ -1,0 +1,17 @@
+[package]
+name = "devorch-ui-bin"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Devorch desktop application."
+
+[[bin]]
+name = "devorch-ui"
+path = "src/main.rs"
+
+[dependencies]
+devorch-ui.workspace = true
+eframe.workspace = true
+tracing-subscriber.workspace = true

@@ -9,8 +9,9 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use devorch_config::Config;
-use devorch_protocol::AgentKind;
+use devorch_config::{Config, TaskRisk};
+use devorch_mission::{MissionRequest, MissionRunner, MissionStore};
+use devorch_protocol::{AgentEvent, AgentKind};
 use devorch_store::Store;
 use devorch_workspace::{CreateWorkspace, WorkspaceManager};
 
@@ -45,8 +46,48 @@ enum Command {
         #[command(subcommand)]
         command: AgentCommand,
     },
+    /// Run and inspect missions.
+    Mission {
+        #[command(subcommand)]
+        command: MissionCommand,
+    },
     /// Report configuration, database and agent status.
     Doctor,
+}
+
+#[derive(Subcommand)]
+enum MissionCommand {
+    /// Run a mission: compare candidates, merge the winner, verify the merge.
+    Run {
+        /// What the agents should accomplish.
+        #[arg(long)]
+        goal: String,
+        /// Repository to work in.
+        #[arg(long, default_value = ".")]
+        repo: PathBuf,
+        /// Agents to use, comma separated. Omit to let the router decide.
+        #[arg(long, value_delimiter = ',')]
+        agents: Vec<String>,
+        /// How much scrutiny the task warrants.
+        #[arg(long, default_value = "normal")]
+        risk: String,
+        /// Cap on agents running at once. Overrides the config default.
+        #[arg(long)]
+        max_parallel: Option<usize>,
+        /// Paths the task is authorized to touch.
+        #[arg(long, value_delimiter = ',')]
+        owned_paths: Vec<PathBuf>,
+        /// Per-agent wall-clock ceiling, in seconds.
+        #[arg(long)]
+        timeout: Option<u64>,
+        /// Compare candidates but do not merge.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// List missions, newest first.
+    List,
+    /// Show one mission in full.
+    Show { id: String },
 }
 
 #[derive(Subcommand)]
@@ -116,6 +157,7 @@ async fn main() -> Result<()> {
     match cli.command {
         Command::Workspace { command } => workspace(command, &config, cli.json).await,
         Command::Agent { command } => agent(command, cli.json).await,
+        Command::Mission { command } => mission(command, config, cli.json).await,
         Command::Doctor => doctor(&config, &config_path, cli.json).await,
     }
 }
@@ -375,4 +417,250 @@ async fn doctor(config: &Config, config_path: &PathBuf, json: bool) -> Result<()
         );
     }
     Ok(())
+}
+
+/// Parse the `--risk` flag.
+fn parse_risk(raw: &str) -> Result<TaskRisk> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "low" => Ok(TaskRisk::Low),
+        "normal" => Ok(TaskRisk::Normal),
+        "high" => Ok(TaskRisk::High),
+        "all" | "compare-all" => Ok(TaskRisk::ExplicitCompareAll),
+        other => anyhow::bail!("unknown risk `{other}`; expected low, normal, high or all"),
+    }
+}
+
+async fn mission(command: MissionCommand, mut config: Config, json: bool) -> Result<()> {
+    let store = open_store(&config)?;
+
+    match command {
+        MissionCommand::Run {
+            goal,
+            repo,
+            agents,
+            risk,
+            max_parallel,
+            owned_paths,
+            timeout,
+            dry_run,
+        } => {
+            if let Some(max) = max_parallel {
+                anyhow::ensure!(max >= 1, "--max-parallel must be at least 1");
+                config.runtime.max_parallel_agents = max;
+            }
+
+            let agents = agents
+                .iter()
+                .map(|raw| {
+                    raw.parse::<AgentKind>()
+                        .with_context(|| format!("unknown agent `{raw}`"))
+                })
+                .collect::<Result<Vec<_>>>()?;
+
+            let request = MissionRequest {
+                agents,
+                owned_paths,
+                agent_timeout: timeout.map(std::time::Duration::from_secs),
+                dry_run,
+                ..MissionRequest::new(goal, repo).risk(parse_risk(&risk)?)
+            };
+
+            let runner = MissionRunner::new(&store, config);
+            let outcome = runner
+                .run(request, |progress| report_progress(&progress, json))
+                .await;
+
+            match outcome {
+                Ok(outcome) => {
+                    if json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&serde_json::json!({
+                                "mission": outcome.record,
+                                "winner": outcome.winner().map(|a| a.as_str()),
+                                "merge_commit": outcome.merge_commit,
+                                "reasoning": outcome.plan.reasoning,
+                            }))?
+                        );
+                    } else {
+                        print_outcome(&outcome);
+                    }
+                    Ok(())
+                }
+                // A mission that finds no acceptable candidate is a real
+                // answer, not a crash. It exits non-zero so scripts can react,
+                // and says why.
+                Err(e) => {
+                    eprintln!("mission failed: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+
+        MissionCommand::List => {
+            let missions = MissionStore::new(&store).list()?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&missions)?);
+            } else if missions.is_empty() {
+                println!("no missions");
+            } else {
+                for m in missions {
+                    println!(
+                        "{:<28} {:<10} {:<8} {}",
+                        m.id.as_str(),
+                        format!("{:?}", m.status).to_lowercase(),
+                        m.winner.map(|a| a.as_str()).unwrap_or("-"),
+                        m.goal
+                    );
+                }
+            }
+            Ok(())
+        }
+
+        MissionCommand::Show { id } => {
+            let mission_id = id
+                .parse()
+                .map_err(|_| anyhow::anyhow!("invalid id `{id}`"))?;
+            let record = MissionStore::new(&store)
+                .get(&mission_id)?
+                .with_context(|| format!("no mission with id {id}"))?;
+
+            if json {
+                println!("{}", serde_json::to_string_pretty(&record)?);
+                return Ok(());
+            }
+
+            println!("mission {}", record.id);
+            println!("  goal    {}", record.goal);
+            println!("  status  {:?}", record.status);
+            println!("  base    {}", short(&record.base_commit));
+            if let Some(winner) = record.winner {
+                println!("  winner  {winner}");
+            }
+            if let Some(commit) = &record.merge_commit {
+                println!("  merged  {}", short(commit));
+            }
+            if let Some(failure) = &record.failure {
+                println!("  failed  {failure}");
+            }
+            println!("  candidates:");
+            for c in &record.candidates {
+                println!(
+                    "    {:<8} {:<8} {} files, {} churn, {}ms{}",
+                    c.agent.as_str(),
+                    if c.passed { "passed" } else { "rejected" },
+                    c.touched_paths,
+                    c.churn,
+                    c.duration_ms,
+                    c.rejection
+                        .as_ref()
+                        .map(|r| format!(" — {r}"))
+                        .unwrap_or_default()
+                );
+            }
+            Ok(())
+        }
+    }
+}
+
+/// First 12 characters of a commit SHA.
+fn short(sha: &str) -> &str {
+    &sha[..12.min(sha.len())]
+}
+
+/// Stream mission progress to the terminal.
+///
+/// Suppressed under `--json` so the structured result stays the only thing on
+/// stdout and remains parseable.
+fn report_progress(progress: &devorch_mission::MissionProgress<'_>, json: bool) {
+    use devorch_mission::MissionProgress;
+
+    if json {
+        return;
+    }
+
+    match progress {
+        MissionProgress::Planned(plan) => {
+            let names: Vec<_> = plan.candidates.iter().map(|a| a.as_str()).collect();
+            println!(
+                "plan: {} candidate(s) [{}], {} at a time",
+                plan.candidates.len(),
+                names.join(", "),
+                plan.parallelism
+            );
+            for reason in &plan.reasoning {
+                println!("  - {reason}");
+            }
+        }
+        MissionProgress::CandidateStarted(agent, workspace) => {
+            println!("→ {agent} started in {workspace}");
+        }
+        MissionProgress::AgentEvent(agent, event) => {
+            // Reasoning text is never echoed: it is the model's private
+            // thinking, not its answer.
+            if let AgentEvent::TextDelta(t) = event {
+                if !t.reasoning {
+                    let line = t.text.trim();
+                    if !line.is_empty() {
+                        println!("  [{agent}] {line}");
+                    }
+                }
+            }
+        }
+        MissionProgress::CandidateFinished(candidate) => {
+            println!(
+                "← {} finished: {} file(s), {} churn, tests {}",
+                candidate.agent,
+                candidate.inventory.touched_count(),
+                candidate.inventory.churn,
+                if candidate.verification.passed() {
+                    "passed"
+                } else {
+                    "failed"
+                }
+            );
+        }
+        MissionProgress::Compared(comparison) => {
+            println!("comparison:");
+            for evaluation in &comparison.evaluations {
+                println!(
+                    "  {:<8} {:<8} {} files, {} churn{}",
+                    evaluation.candidate.agent.as_str(),
+                    if evaluation.passed() {
+                        "passed"
+                    } else {
+                        "rejected"
+                    },
+                    evaluation.score.touched_paths,
+                    evaluation.score.churn,
+                    evaluation
+                        .rejection_summary()
+                        .map(|r| format!(" — {r}"))
+                        .unwrap_or_default()
+                );
+            }
+        }
+        MissionProgress::Merged(commit) => println!("merged as {}", short(commit)),
+        MissionProgress::PostMergeVerified(report) => {
+            println!(
+                "post-merge gate: {}",
+                if report.passed() { "passed" } else { "FAILED" }
+            );
+        }
+    }
+}
+
+/// Print the final result of a mission.
+fn print_outcome(outcome: &devorch_mission::MissionOutcome) {
+    println!();
+    match outcome.winner() {
+        Some(winner) => println!("winner: {winner}"),
+        None => println!("winner: none"),
+    }
+    if let Some(commit) = &outcome.merge_commit {
+        println!("merged: {}", short(commit));
+    } else {
+        println!("merged: no (dry run)");
+    }
+    println!("mission: {}", outcome.record.id);
 }

@@ -1,34 +1,28 @@
 [package]
-name = "devorch"
+name = "devorch-ui"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Devorch command line interface."
-
-[[bin]]
-name = "devorch"
-path = "src/main.rs"
+description = "Devorch native desktop UI (egui/eframe)."
 
 [dependencies]
-anyhow.workspace = true
-clap.workspace = true
+chrono.workspace = true
 devorch-agent.workspace = true
 devorch-config.workspace = true
 devorch-evaluate.workspace = true
-devorch-git.workspace = true
 devorch-mission.workspace = true
 devorch-policy.workspace = true
-devorch-router.workspace = true
-devorch-verify.workspace = true
 devorch-protocol.workspace = true
+devorch-router.workspace = true
 devorch-store.workspace = true
+devorch-verify.workspace = true
 devorch-workspace.workspace = true
-serde_json.workspace = true
+eframe.workspace = true
+egui.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

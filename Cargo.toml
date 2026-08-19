@@ -19,7 +19,9 @@ members = [
     "crates/devorch-evaluate",
     "crates/devorch-router",
     "crates/devorch-mission",
+    "crates/devorch-ui",
     "bins/devorch",
+    "bins/devorch-ui",
     "xtask",
 ]
 
