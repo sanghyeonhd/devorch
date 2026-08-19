@@ -1,189 +1,197 @@
-# devorch
+# Devorch
 
-**Local-First Multi-LLM Orchestrator** - A comprehensive AI model orchestration system with OkAON (Outcome-KPI-Aware Orchestration Network) for intelligent model routing and learning.
+**A local-first multi-agent development orchestrator, written entirely in Rust.**
 
-## 🎯 Features
+Devorch runs several AI coding agents against the same task in isolated git
+worktrees, judges their work on deterministic evidence, and merges the one that
+actually passes.
 
-### Core Capabilities
-- **Multi-Provider Support**: OpenAI, Anthropic, Google, OpenRouter, Ollama (local)
-- **Intelligent Routing**: OkAON-based model selection with Thompson Sampling
-- **Local-First**: Embedded SQLite database, no external dependencies
-- **Cross-Platform**: macOS, Linux, Windows (amd64/arm64)
-- **CGO-Free**: Pure Go build with `modernc.org/sqlite`
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-### Phase 1-40 Implementation Complete ✅
+---
 
-| Phase | Component | Description |
-|-------|-----------|-------------|
-| 1-5 | Core | CLI, providers, wire DI, storage |
-| 6-10 | OkAON | Learning data lake, bench framework |
-| 11-15 | Router | Policy, category routing, fallback chains |
-| 16-20 | Quality | Evaluators, drift detection, experiments |
-| 21-25 | Learning | Thompson sampling, UCB, reward calculation |
-| 26-30 | Platform | Model resolver, delegate, background tasks |
-| 31-35 | Extended | HW profile, repo fingerprint, composite eval |
-| 36-40 | Advanced | Task classification, ensemble, A/B testing |
+## The idea
 
-## 📦 Installation
+Four coding agents are installed on a typical machine today — Codex, Claude
+Code, Grok Build, Gemini CLI. Most tools treat that as a menu. Devorch treats it
+as a comparison.
 
-### Prerequisites
-- Go 1.22+ (recommended: Go 1.25+)
+Three decisions follow from that, and they are what distinguishes this tool:
 
-### Build from Source
+**Evidence outranks assertion.** An agent saying it fixed the bug is a claim.
+The exit code of the test suite is evidence. A candidate that fails the gate
+cannot win because it wrote a smaller diff, took less time, or said it
+succeeded. There is no code path where a language model overrules a test result.
+
+**The whole change set counts.** `git diff --numstat` does not show untracked
+files. An agent that fixes the bug *and* drops an unrequested `NOTES.md` looks
+identical to one that only fixed the bug — unless you look at
+`git status --porcelain=v1`, `git ls-files --others` and the staged diff too.
+Devorch looks at all of them, and classifies what it finds: build output,
+binaries, and anything that resembles a credential are grounds for rejection,
+not footnotes.
+
+**Four agents installed does not mean four agents running.** Four CLIs plus a
+browser dwarf the orchestrator's own footprint, so candidate count is the
+largest resource decision the system makes. Low-risk work gets one agent.
+High-risk work compares four — two at a time. Idle agent processes: zero.
+
+## What a mission does
+
+```
+goal
+ └─ router picks how many candidates, and which
+     └─ one git worktree per candidate, branched from the same base
+         └─ each agent runs in its own worktree, streaming normalized events
+             └─ deterministic gate: build, tests, lint
+                 └─ complete change inventory, including untracked files
+                     └─ compare → winner
+                         └─ merge onto an integration branch
+                             └─ run the gate again on the merged result
+                                 └─ losing worktrees removed, records kept
+```
+
+The gate runs twice on purpose. A candidate that passes alone can still break
+the integration branch; if the merged result fails, the branch is rolled back
+to base and the mission fails rather than leaving a bad merge behind.
+
+## Install
+
+Requires Rust 1.85+ and git.
 
 ```bash
-# Clone and build
-git clone https://github.com/your-repo/devorch.git
+git clone https://github.com/sanghyeonhd/devorch
 cd devorch
-go mod tidy
-go build -o bin/devorch ./cmd/devorch
+cargo build --release
 ```
 
-### Cross-Platform Build
+Two binaries are produced: `target/release/devorch` (CLI) and
+`target/release/devorch-ui` (desktop app). On macOS, `cargo xtask bundle-macos`
+wraps the UI in a proper `.app`.
+
+Devorch drives whichever agent CLIs you already have installed and signed in.
+It installs nothing and stores no credentials.
+
+## Use
 
 ```bash
-# macOS
-CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o bin/devorch-darwin-amd64 ./cmd/devorch
-CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o bin/devorch-darwin-arm64 ./cmd/devorch
+# What is installed, and what can each one actually do?
+devorch agent inspect
 
-# Linux
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/devorch-linux-amd64 ./cmd/devorch
-CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bin/devorch-linux-arm64 ./cmd/devorch
+# Run a mission.
+devorch mission run \
+  --repo . \
+  --goal "Fix the failing authentication test" \
+  --risk high
 
-# Windows
-CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o bin/devorch-windows-amd64.exe ./cmd/devorch
-CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o bin/devorch-windows-arm64.exe ./cmd/devorch
+# Compare without merging.
+devorch mission run --repo . --goal "..." --dry-run
+
+# What happened?
+devorch mission list
+devorch mission show <id>
 ```
 
-## 🚀 Quick Start
+Capabilities are read from the installed binaries at runtime, never assumed. If
+a vendor renames a flag, the capability disappears and the router stops choosing
+that mode — instead of a mission failing halfway through.
 
-### Environment Setup
+### The desktop app
 
 ```bash
-# API Keys (optional - for cloud providers)
-export OPENAI_API_KEY="sk-..."
-export OPENROUTER_API_KEY="..."
-export ANTHROPIC_API_KEY="..."
-export GOOGLE_API_KEY="..."
-
-# Configuration
-export DEVORCH_DB_PATH="./devorch.db"      # SQLite database path
-export DEVORCH_OFFLINE=1                    # Offline mode
-export DEVORCH_AUTO_INSTALL=1               # Auto-install Ollama models
-export DEVORCH_OLLAMA_HOST="http://127.0.0.1:11434"
+cargo run --release -p devorch-ui-bin
 ```
 
-### Basic Commands
+Six screens: missions with a live log, the agent board, workspaces, a compare
+view, the policy as it actually evaluates, and settings. The compare view has
+two modes — an evidence table, and a 3D constellation that shows the shape of a
+mission: which candidates ran, which were cut, and what reached the merge.
+
+To see it with data before running anything real:
 
 ```bash
-# Health check
-./devorch doctor
-
-# List available providers
-./devorch providers
-
-# List models for a provider
-./devorch models --provider ollama
-./devorch models --provider openai
-./devorch models --provider openrouter
-
-# Pull Ollama model
-./devorch ollama-pull --model llama3.2
-
-# Chat (records to OkAON learning store)
-./devorch chat --provider ollama --model llama3.2 --prompt "Hello, world!"
-./devorch chat --provider openrouter --model openai/gpt-4o-mini --prompt "Explain Go interfaces"
+cargo run -p devorch-mission --example seed_demo -- /tmp/devorch-demo
+DEVORCH_HOME=/tmp/devorch-demo cargo run --release -p devorch-ui-bin
 ```
 
-## 🏗️ Architecture
+## Policy
 
+Devorch owns the final permission decision. Vendor approval and sandbox flags
+are inputs, not authority — an agent started with a permissive vendor flag still
+has to pass this engine.
+
+Policy is written against capabilities, not categories. "Allow shell" is not a
+policy; `process.run` inside the candidate's own worktree is. Scope is what
+separates routine from damage: the same write is ordinary work inside a worktree
+and refused outside one, with `..` resolved before the file exists rather than
+after. A risk level with no rule denies — policy gaps fail closed.
+
+## Configuration
+
+`~/.devorch/config.toml`, all optional:
+
+```toml
+[runtime]
+max_parallel_agents = 2      # peak agent processes, regardless of candidate count
+idle_session_ttl_seconds = 300
+persistent_protocols = "auto"
+
+[agents]
+enabled = ["codex", "claude", "grok", "gemini"]
 ```
-devorch/
-├── cmd/
-│   ├── devorch/       # CLI entry point
-│   └── devorchd/      # Daemon entry point
-├── internal/
-│   ├── provider/      # LLM providers (openai, anthropic, ollama, etc.)
-│   ├── router/        # Intelligent routing with OkAON
-│   ├── okaon/         # OkAON learning & Thompson sampling
-│   ├── bench/         # Benchmarking framework
-│   ├── modelresolver/ # Model capability resolution
-│   ├── delegate/      # Multi-provider delegation
-│   ├── background/    # Background task management
-│   ├── platform/      # Platform detection (OS, arch, HW)
-│   ├── storage/       # SQLite storage layer
-│   └── wire/          # Dependency injection
-└── bin/               # Build outputs
-```
 
-### Key Components
+The Rust core uses `~/.devorch/devorch3.db`. If you ran the Go build, its
+`devorch.db` is untouched and still there.
 
-- **OkAON (Outcome-KPI-Aware Orchestration Network)**: Local learning system that records model performance and uses bandit algorithms for intelligent routing
-- **Router**: Multi-strategy routing with fallback chains, drift detection, and quality gates
-- **Bench**: Comprehensive benchmarking with latency, cost, and quality metrics
-- **ModelResolver**: Maps model capabilities across providers
-- **Delegate**: Handles multi-provider failover and load balancing
-
-## 📊 Database Schema
-
-22 migrations create the following key tables:
-
-| Table | Purpose |
-|-------|---------|
-| `okaon_runs` | Model execution records |
-| `okaon_work` | Work item tracking |
-| `okaon_quality` | Quality evaluations |
-| `okaon_reward` | Learning rewards |
-| `okaon_arm_stats` | Bandit arm statistics |
-| `router_policy` | Routing policies |
-| `bench_runs` | Benchmark results |
-| `model_stats` | Model performance stats |
-| `experiments` | A/B test experiments |
-
-## 🧪 Testing
+## Development
 
 ```bash
-# Run all tests
-go test ./...
-
-# Run with coverage
-go test -cover ./...
-
-# Run specific package tests
-go test ./internal/okaon/...
-go test ./internal/router/...
+cargo fmt --all -- --check
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo xtask verify-agent-rules
 ```
 
-## 📝 Development
+Tests do not require an API key or a subscription. Adapter conformance runs
+against recorded streams in `testdata/agents/`, including live captures from the
+real CLIs; missions run end to end against real git with scripted agents.
 
-### Project Statistics
-
-- **248 Go source files**
-- **22 SQL migrations**
-- **6 platform builds** (darwin/linux/windows × amd64/arm64)
-- **~14MB binary size** (single static binary)
-
-### Code Structure
+Live smoke against the actual CLIs is opt-in:
 
 ```bash
-# Count Go files
-find . -name "*.go" | wc -l  # 248
-
-# List migrations
-ls internal/storage/sqlite/migrations/  # 0001-0022
-
-# Check binary size
-ls -lh bin/devorch-*  # ~14MB each
+DEVORCH_LIVE_GROK=1 cargo test --workspace -- --ignored
 ```
 
-## 📄 License
+Agent rules live in `docs/agent-rules.md`; `AGENTS.md`, `CLAUDE.md` and
+`GEMINI.md` are generated from it by `cargo xtask sync-agent-rules`, and CI
+fails if they drift.
 
-MIT License - see LICENSE file for details.
+## What this release does not do
 
-## 🔗 References
+Stated plainly rather than left to discovery:
 
-- [OkAON Design Document](docs/phase20.md)
-- [Router Policy Design](docs/phase15.md)
-- [Benchmark Framework](docs/phase6.md)
-- [Model Resolver](docs/phase26.md)
+- **No native OS control.** No mouse, no keyboard, no screen capture. The policy
+  engine denies it and there is no runtime behind it.
+- **No browser automation.**
+- **No autonomous operation.** Every mission is started by a person.
+- **OkAON learning data is not migrated** from the Go database. The schema map
+  in `docs/rust-migration/sql-schema-map.md` records the disposition of all 22
+  tables; the migration itself is future work.
+- **Windows and Linux are built in CI but not yet exercised in anger.** The
+  process layer was written platform-neutral; macOS is where it has actually run.
 
+## History
+
+Devorch was a Go project through v0.1.0. The full Go tree is preserved at the
+tag `devorch-go-final`. The migration, its measurements and the two development
+simulations that shaped it are documented in `docs/rust-migration/` and
+`docs/upgrade/`.
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE), [NOTICE](NOTICE) and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Devorch contains no ported upstream source; the vendor adapters were written
+against recorded CLI output. See `docs/upstream-sources.toml`.

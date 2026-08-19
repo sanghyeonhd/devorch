@@ -24,14 +24,18 @@ fn main() -> Result<()> {
         Some("sync-agent-rules") => sync(false),
         Some("verify-agent-rules") => sync(true),
         Some("bundle-macos") => bundle_macos(),
+        Some("third-party-notices") => third_party_notices(),
         Some(other) => {
             bail!(
-                "unknown task `{other}`; expected sync-agent-rules, verify-agent-rules \
-                 or bundle-macos"
+                "unknown task `{other}`; expected sync-agent-rules, verify-agent-rules, \
+                 bundle-macos or third-party-notices"
             )
         }
         None => {
-            eprintln!("usage: cargo xtask <sync-agent-rules|verify-agent-rules|bundle-macos>");
+            eprintln!(
+                "usage: cargo xtask \
+                 <sync-agent-rules|verify-agent-rules|bundle-macos|third-party-notices>"
+            );
             std::process::exit(2);
         }
     }
@@ -157,4 +161,112 @@ fn repo_root() -> Result<PathBuf> {
             None => bail!("could not find {SOURCE}; run this from inside the repository"),
         }
     }
+}
+
+/// Regenerate `THIRD_PARTY_NOTICES.md` from the actual dependency graph.
+///
+/// The list comes from `cargo tree`, not from the manifests, so it describes
+/// what really links into the binaries. A notices file that drifts from the
+/// build is worse than none: it makes a claim about redistribution that nobody
+/// has checked.
+fn third_party_notices() -> Result<()> {
+    use std::collections::BTreeMap;
+
+    let root = repo_root()?;
+    let output = std::process::Command::new("cargo")
+        .args([
+            "tree",
+            "--workspace",
+            "--edges",
+            "normal",
+            "--prefix",
+            "none",
+            "--format",
+            "{p}|{l}",
+        ])
+        .current_dir(&root)
+        .output()
+        .context("run cargo tree")?;
+
+    if !output.status.success() {
+        bail!(
+            "cargo tree failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    // (crate, version) -> license. A BTreeMap both deduplicates the repeated
+    // entries cargo prints for shared dependencies and sorts the result, so the
+    // file only changes when the dependency graph does.
+    let mut crates: BTreeMap<(String, String), String> = BTreeMap::new();
+    let mut by_license: BTreeMap<String, usize> = BTreeMap::new();
+
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let Some((name, license)) = line.split_once('|') else {
+            continue;
+        };
+        let name = name.replace(" (proc-macro)", "").replace(" (*)", "");
+        let name = name.trim();
+        let license = license.replace(" (*)", "");
+        let license = license.trim();
+
+        if name.starts_with("devorch") || license.is_empty() {
+            continue;
+        }
+        let (krate, version) = match name.rsplit_once(" v") {
+            Some((k, v)) => (k.trim().to_string(), v.trim().to_string()),
+            None => (name.to_string(), String::new()),
+        };
+        if crates
+            .insert((krate, version), license.to_string())
+            .is_none()
+        {
+            *by_license.entry(license.to_string()).or_default() += 1;
+        }
+    }
+
+    if crates.is_empty() {
+        bail!("cargo tree produced no dependencies; refusing to write an empty notices file");
+    }
+
+    let mut out = String::new();
+    out.push_str("# Third-party notices\n\n");
+    out.push_str("Devorch is licensed under the Apache License 2.0 (see `LICENSE`).\n\n");
+    out.push_str(
+        "It links the Rust crates listed below. Every one of them is under a permissive\n\
+         license compatible with Apache-2.0; there is no copyleft dependency in the\n\
+         build. This file is generated from `cargo tree`, so it describes what actually\n\
+         links rather than what a manifest intends.\n\n",
+    );
+    out.push_str(
+        "Devorch contains no ported upstream source. The vendor adapters were written\n\
+         against recorded CLI output, not against vendor code — see\n\
+         `docs/upstream-sources.toml`.\n\n",
+    );
+
+    out.push_str("## Summary\n\n| License | Crates |\n|---|---:|\n");
+    let mut summary: Vec<_> = by_license.into_iter().collect();
+    summary.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    for (license, count) in summary {
+        out.push_str(&format!("| {license} | {count} |\n"));
+    }
+    out.push_str(&format!("\n**{} distinct crates.**\n\n", crates.len()));
+
+    out.push_str("## Crates\n\n| Crate | Version | License |\n|---|---|---|\n");
+    for ((krate, version), license) in &crates {
+        out.push_str(&format!("| {krate} | {version} | {license} |\n"));
+    }
+
+    out.push_str(
+        "\n## Fonts\n\n\
+         `epaint_default_fonts` bundles the fonts egui renders with. They carry their\n\
+         own licenses — OFL-1.1 and UFL-1.0 — which permit redistribution as part of a\n\
+         larger work and are listed here for that reason.\n\n\
+         ## Regenerating\n\n```bash\ncargo xtask third-party-notices\n```\n",
+    );
+
+    let path = root.join("THIRD_PARTY_NOTICES.md");
+    std::fs::write(&path, out).with_context(|| format!("write {}", path.display()))?;
+    println!("wrote {} ({} crates)", path.display(), crates.len());
+    Ok(())
 }

@@ -1,0 +1,28 @@
+# Upstream source manifest.
+#
+# The agent rules require that no upstream code enters Devorch without an exact
+# source commit recorded here.
+#
+# As of this release the manifest is empty, and that is a statement rather than
+# an omission: Devorch contains no ported upstream code. The vendor adapters
+# were written against observed behavior — the CLIs were run, their output was
+# captured, and the recordings are in `testdata/agents/`. Observing a program's
+# output is not copying its source.
+#
+# The distinction matters most for Claude Code, whose repository is not under an
+# open-source redistribution license: its adapter is derived entirely from what
+# `claude -p --output-format stream-json` emits on this machine, never from its
+# code.
+#
+# Any future port must add an entry in this shape before the code is merged:
+#
+# [[source]]
+# name = "openai-codex"
+# repo = "https://github.com/openai/codex"
+# commit = "<exact 40-character sha>"
+# license = "Apache-2.0"
+# usage = "PORT"
+# source_path = "codex-rs/exec/..."
+# target_crate = "devorch-agent-codex"
+
+sources = []
