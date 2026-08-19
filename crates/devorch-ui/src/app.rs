@@ -36,6 +36,8 @@ pub struct DevorchApp {
     store: Option<Arc<Mutex<Store>>>,
     runtime: Option<tokio::runtime::Runtime>,
     updates: (Sender<Update>, Receiver<Update>),
+    /// Where the operator has rotated the constellation to.
+    camera: crate::graph3d::Camera,
 }
 
 impl Default for DevorchApp {
@@ -84,6 +86,7 @@ impl DevorchApp {
             store,
             runtime,
             updates: std::sync::mpsc::channel(),
+            camera: crate::graph3d::Camera::default(),
         };
         app.reload();
         app
@@ -248,7 +251,7 @@ impl eframe::App for DevorchApp {
             Screen::MissionControl => views::mission_control(ui, &self.state, &mut commands),
             Screen::AgentBoard => views::agent_board(ui, &self.state),
             Screen::Workspaces => views::workspaces(ui, &self.state, &mut commands),
-            Screen::Compare => views::compare(ui, &self.state),
+            Screen::Compare => views::compare(ui, &self.state, &mut self.camera, &mut commands),
             Screen::Policy => views::policy(ui),
             Screen::Settings => views::settings(ui, &self.state, &self.config),
         });

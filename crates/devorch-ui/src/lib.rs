@@ -10,6 +10,7 @@
 //! decides a merge. It asks [`devorch_mission`] to, and draws the answer.
 
 pub mod app;
+pub mod graph3d;
 pub mod state;
 pub mod theme;
 pub mod views;

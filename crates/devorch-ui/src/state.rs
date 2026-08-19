@@ -13,6 +13,16 @@ use devorch_mission::{MissionRecord, MissionStatus};
 use devorch_protocol::AgentKind;
 use devorch_store::WorkspaceRecord;
 
+/// How the Compare screen presents a mission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CompareMode {
+    /// The evidence table: what was measured, in numbers.
+    #[default]
+    Evidence,
+    /// The constellation: how the mission was shaped.
+    Constellation,
+}
+
 /// Which screen is showing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Screen {
@@ -181,6 +191,7 @@ pub struct UiState {
     /// The mission shown in the Compare view.
     pub selected_mission: Option<usize>,
     pub form: MissionForm,
+    pub compare_mode: CompareMode,
     pub progress: RunProgress,
     /// Whatever went wrong last, shown in a banner until dismissed.
     pub error: Option<String>,
@@ -224,6 +235,8 @@ pub enum Command {
     UpdateForm(MissionForm),
     /// Remove a workspace and its branch.
     RemoveWorkspace(String),
+    /// Switch how the Compare screen presents a mission.
+    SetCompareMode(CompareMode),
     /// Dismiss the error banner.
     ClearError,
 }
@@ -267,6 +280,10 @@ pub fn apply(state: &mut UiState, command: Command) -> Effect {
             Effect::None
         }
         Command::RemoveWorkspace(name) => Effect::RemoveWorkspace(name),
+        Command::SetCompareMode(mode) => {
+            state.compare_mode = mode;
+            Effect::None
+        }
         Command::ClearError => {
             state.error = None;
             Effect::None
@@ -439,6 +456,20 @@ mod tests {
         };
         apply(&mut state, Command::ClearError);
         assert!(state.error.is_none());
+    }
+
+    #[test]
+    fn compare_defaults_to_the_evidence_table() {
+        // Numbers first: the constellation shows shape, the table shows what
+        // actually decided the outcome.
+        let mut state = UiState::default();
+        assert_eq!(state.compare_mode, CompareMode::Evidence);
+
+        apply(
+            &mut state,
+            Command::SetCompareMode(CompareMode::Constellation),
+        );
+        assert_eq!(state.compare_mode, CompareMode::Constellation);
     }
 
     #[test]

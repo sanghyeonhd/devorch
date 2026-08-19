@@ -23,14 +23,84 @@ fn main() -> Result<()> {
     match task.as_deref() {
         Some("sync-agent-rules") => sync(false),
         Some("verify-agent-rules") => sync(true),
+        Some("bundle-macos") => bundle_macos(),
         Some(other) => {
-            bail!("unknown task `{other}`; expected sync-agent-rules or verify-agent-rules")
+            bail!(
+                "unknown task `{other}`; expected sync-agent-rules, verify-agent-rules \
+                 or bundle-macos"
+            )
         }
         None => {
-            eprintln!("usage: cargo xtask <sync-agent-rules|verify-agent-rules>");
+            eprintln!("usage: cargo xtask <sync-agent-rules|verify-agent-rules|bundle-macos>");
             std::process::exit(2);
         }
     }
+}
+
+/// Wrap the release UI binary in a macOS `.app` bundle.
+///
+/// A bare Mach-O binary runs, but macOS treats it as a faceless process: no
+/// Dock entry, no menu bar, and no application identity for the accessibility
+/// and screen-recording permissions the OS grants per app. The bundle is what
+/// makes it an application rather than a program that happens to open a window.
+fn bundle_macos() -> Result<()> {
+    if !cfg!(target_os = "macos") {
+        bail!("bundle-macos only runs on macOS");
+    }
+
+    let root = repo_root()?;
+    let binary = root.join("target/release/devorch-ui");
+    if !binary.exists() {
+        bail!(
+            "{} does not exist; run `cargo build --release -p devorch-ui-bin` first",
+            binary.display()
+        );
+    }
+
+    let app = root.join("target/release/Devorch.app");
+    let macos_dir = app.join("Contents/MacOS");
+    if app.exists() {
+        std::fs::remove_dir_all(&app).with_context(|| format!("clear {}", app.display()))?;
+    }
+    std::fs::create_dir_all(&macos_dir)?;
+    std::fs::copy(&binary, macos_dir.join("devorch-ui"))
+        .with_context(|| format!("copy {}", binary.display()))?;
+
+    let version = env!("CARGO_PKG_VERSION");
+    std::fs::write(
+        app.join("Contents/Info.plist"),
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Devorch</string>
+    <key>CFBundleDisplayName</key>
+    <string>Devorch</string>
+    <key>CFBundleIdentifier</key>
+    <string>dev.devorch.desktop</string>
+    <key>CFBundleVersion</key>
+    <string>{version}</string>
+    <key>CFBundleShortVersionString</key>
+    <string>{version}</string>
+    <key>CFBundleExecutable</key>
+    <string>devorch-ui</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>11.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+</dict>
+</plist>
+"#
+        ),
+    )
+    .with_context(|| "write Info.plist")?;
+
+    println!("bundled {}", app.display());
+    Ok(())
 }
 
 /// Generate the vendor rule files, or in `check` mode verify they are current.

@@ -9,7 +9,8 @@ use devorch_mission::{MissionRecord, MissionStatus};
 use devorch_protocol::AgentKind;
 use egui::{Color32, RichText, Ui};
 
-use crate::state::{Command, Screen, UiState};
+use crate::graph3d::{self, Camera, Constellation};
+use crate::state::{Command, CompareMode, Screen, UiState};
 use crate::theme;
 
 /// The left navigation rail.
@@ -366,8 +367,27 @@ pub fn workspaces(ui: &mut Ui, state: &UiState, commands: &mut Vec<Command>) {
 ///
 /// Deterministic evidence is shown first and largest, because that is what
 /// decided the outcome.
-pub fn compare(ui: &mut Ui, state: &UiState) {
-    ui.heading("Compare");
+pub fn compare(ui: &mut Ui, state: &UiState, camera: &mut Camera, commands: &mut Vec<Command>) {
+    ui.horizontal(|ui| {
+        ui.heading("Compare");
+        ui.add_space(12.0);
+        for (mode, label, hint) in [
+            (CompareMode::Evidence, "Evidence", "what was measured"),
+            (
+                CompareMode::Constellation,
+                "Constellation",
+                "how the mission was shaped",
+            ),
+        ] {
+            if ui
+                .selectable_label(state.compare_mode == mode, label)
+                .on_hover_text(hint)
+                .clicked()
+            {
+                commands.push(Command::SetCompareMode(mode));
+            }
+        }
+    });
 
     let Some(mission) = state.selected() else {
         ui.label(RichText::new("Select a mission from Mission Control.").color(theme::MUTED));
@@ -386,6 +406,11 @@ pub fn compare(ui: &mut Ui, state: &UiState) {
         .color(theme::MUTED),
     );
     ui.add_space(8.0);
+
+    if state.compare_mode == CompareMode::Constellation {
+        graph3d::show(ui, &Constellation::from_mission(mission), camera);
+        return;
+    }
 
     egui::ScrollArea::vertical().show(ui, |ui| {
         egui::Grid::new("compare-grid")

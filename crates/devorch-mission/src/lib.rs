@@ -33,7 +33,7 @@ pub mod fake;
 pub mod record;
 
 pub use fake::{FakeAgent, FakeBehavior, FakeExecutor};
-pub use record::{MissionRecord, MissionStatus, MissionStore};
+pub use record::{CandidateRecord, MissionRecord, MissionStatus, MissionStore};
 
 /// Failure modes of a mission.
 #[derive(Debug, thiserror::Error)]
